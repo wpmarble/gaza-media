@@ -251,15 +251,15 @@
 		"headline": "US chess grandmaster Daniel Naroditsky dies at 29",
 		"text": "American chess grandmaster Daniel Naroditsky has died unexpectedly at the age of 29, his family said in a statement released by his club, the Charlotte Chess Center, on Monday.\n\n“It is with great sadness that we share the unexpected passing of Daniel Naroditsky,” the family said. “Daniel was a talented chess player, commentator, and educator, and a cherished member of the chess community.”\n\nNaroditsky became a grandmaster, the highest title in chess aside from World Chess Champion, at the age of 18.\n\nHe was consistently ranked in the top 200 worldwide for traditional chess and also excelled at a fast-paced style called blitz chess, maintaining a top-25 ranking throughout his adult career.\n\nFellow grandmasters credited Naroditsky with introducing the sport to a wider audience by livestreaming many of his matches and sharing live commentary on others. Thousands of people regularly tuned in on YouTube and the interactive streaming platform Twitch to watch Naroditsky play.\n\n“He loved streaming, and he loved trying to be educational. The chess world is very grateful,” Hikaru Nakamura, an American grandmaster, said on a livestream on Monday."
 	},
-	{
-		"topic": "placebo",
-		"valence": "placebo",
-		"frame": "science",
-		"source": "New York Times",
-		"url": "https://www.nytimes.com/2025/10/18/science/sea-otters-surfboard-santa-cruz.html",
-		"headline": "Sea Otters Are Stealing Surfboards in California. Again.",
-		"text": "On Wednesday, Isabella Orduna was catching some waves at Steamer Lane, a popular surf spot off Santa Cruz, Calif., when she felt a small nip on her foot.\n\nStartled, Ms. Orduna, a 21-year-old college student, rolled into the water. The moment she surfaced, she saw a “big, fuzzy, chunky bear of an otter” sitting on her board, she said. “I was like, wow, what do I do now?”\n\nThe hijacking of Ms. Orduna’s surfboard was the first of two such incidents reported this week at Steamer Lane. On Thursday, another surfer had their board commandeered by a sea otter.\n\nIf this sounds familiar, that’s because similar incidents happened there two years ago: A female sea otter known as 841 became a sensation after she climbed aboard several surfboards and evaded capture. It’s unclear if 841 is the culprit in this week’s cases. If it’s her, the cases may be written off as troublesome behavior by a repeat offender. But experts say it’s possible that another otter has begun to see the appeal of surfing.\n\nThat may highlight the need to manage clashes between a rising number of human aquatic sports enthusiasts and a resurgent population of marine mammals in their natural habitat. For now, people in the community are calling on surfers and others in the ocean to keep their distance for their own safety and that of the otters."
-	},
+	// {
+	// 	"topic": "placebo",
+	// 	"valence": "placebo",
+	// 	"frame": "science",
+	// 	"source": "New York Times",
+	// 	"url": "https://www.nytimes.com/2025/10/18/science/sea-otters-surfboard-santa-cruz.html",
+	// 	"headline": "Sea Otters Are Stealing Surfboards in California. Again.",
+	// 	"text": "On Wednesday, Isabella Orduna was catching some waves at Steamer Lane, a popular surf spot off Santa Cruz, Calif., when she felt a small nip on her foot.\n\nStartled, Ms. Orduna, a 21-year-old college student, rolled into the water. The moment she surfaced, she saw a “big, fuzzy, chunky bear of an otter” sitting on her board, she said. “I was like, wow, what do I do now?”\n\nThe hijacking of Ms. Orduna’s surfboard was the first of two such incidents reported this week at Steamer Lane. On Thursday, another surfer had their board commandeered by a sea otter.\n\nIf this sounds familiar, that’s because similar incidents happened there two years ago: A female sea otter known as 841 became a sensation after she climbed aboard several surfboards and evaded capture. It’s unclear if 841 is the culprit in this week’s cases. If it’s her, the cases may be written off as troublesome behavior by a repeat offender. But experts say it’s possible that another otter has begun to see the appeal of surfing.\n\nThat may highlight the need to manage clashes between a rising number of human aquatic sports enthusiasts and a resurgent population of marine mammals in their natural habitat. For now, people in the community are calling on surfers and others in the ocean to keep their distance for their own safety and that of the otters."
+	// },
 	{
 		"topic": "placebo",
 		"valence": "placebo",
@@ -268,5 +268,14 @@
 		"url": "https://apnews.com/article/france-louvre-museum-robbery-a3687f330a43e0aaff68c732c4b2585b",
 		"headline": "Thieves steal crown jewels in 4 minutes from Louvre Museum",
 		"text": "In a minutes-long strike Sunday inside the world’s most-visited museum, thieves rode a basket lift up the Louvre's facade, forced a window, smashed display cases and fled with priceless Napoleonic jewels, officials said.\n\nThe daylight heist about 30 minutes after opening, with visitors already inside, was among the highest-profile museum thefts in living memory.\n\nThe theft unfolded just 250 meters from the Mona Lisa, in what Culture Minister Rachida Dati described as a professional “four-minute operation.”\n\nAround 9:30 a.m., several intruders forced a window, cut panes with a disc cutter and went straight for the vitrines, officials said. Interior Minister Laurent Nunez said the crew entered from outside using a basket lift. Their target was the gilded Apollon Gallery — where the royal collection and the Crown Diamonds are displayed, including the Regent, the Sancy and the Hortensia.\n\nAmong nine pieces reportedly taken were a parure with matching necklace and earrings, a brooch and two crowns — an imperial suite prized for 19th-century craftsmanship and provenance, French media reported.\n\nOne object was later found outside the museum. French media identified it as the emerald-set imperial crown of Napoleon III’s wife, Empress Eugénie, containing more than 1,300 diamonds. It was reportedly recovered broken."
+	},
+	{
+		"topic": "placebo",
+		"valence": "placebo",
+		"frame": "global warming",
+		"source": "Al-Jazeera",
+		"url": "https://www.aljazeera.com/news/2023/6/8/planet-warming-at-unprecedented-rate-study-finds",
+		"headline": "Planet warming at ‘unprecedented rate’, study finds",
+		"text": "Global greenhouse gas emissions have reached a record high amid an unparalleled acceleration in global warming, according to a new study.\n\nFrom 2013 to 2022, “human-induced warming has been increasing at an unprecedented rate of more than 0.2 degrees Celsius per decade,” 50 top scientists warned on Thursday in a sweeping climate science update.\n\nAverage annual emissions over the same period hit an all-time high of 54 billion tonnes of CO2 or its equivalent in other gases – about 1,700 tonnes every second – they reported in a peer-reviewed study aimed at policymakers.\n\nWorld leaders will be confronted with the new data at a critical climate summit later this year in Dubai, where a “Global Stocktake” at the United Nations talks will assess progress towards the 2015 Paris Agreement’s temperature goals.\n\nThe findings would appear to close the door on capping global warming under the Paris treaty’s more ambitious 1.5C target, long identified as a guard rail for a relatively climate-safe world, albeit one still roiled by severe impacts."
 	}
 ]
