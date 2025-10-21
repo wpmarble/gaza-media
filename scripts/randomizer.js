@@ -102,19 +102,22 @@ Qualtrics.SurveyEngine.addOnload(function () {
           slot: "1",
           headline: art1 ? art1.headline : "",
           text: art1 ? art1.text : "",
-          topic: art1 ? art1.topic : ""
+          topic: art1 ? art1.topic : "",
+          frame: art1 ? art1.frame : ""
         },
         {
           slot: "2",
           headline: art2 ? art2.headline : "",
           text: art2 ? art2.text : "",
-          topic: art2 ? art2.topic : ""
+          topic: art2 ? art2.topic : "",
+          frame: art2 ? art2.frame : ""
         },
         {
           slot: "3",
           headline: placebo ? placebo.headline : "",
           text: placebo ? placebo.text : "",
-          topic: placebo ? placebo.topic : ""
+          topic: placebo ? placebo.topic : "",
+          frame: placebo ? placebo.frame : ""
         }
       ];
 
@@ -127,6 +130,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
         Qualtrics.SurveyEngine.setEmbeddedData("headline_" + idx, art.headline);
         Qualtrics.SurveyEngine.setEmbeddedData("article_text_" + idx, art.text);
         Qualtrics.SurveyEngine.setEmbeddedData("article_topic_" + idx, art.topic);
+        Qualtrics.SurveyEngine.setEmbeddedData("article_frame_" + idx, art.frame);
       }
 
       if (exposureType === "forced") {
@@ -134,6 +138,77 @@ Qualtrics.SurveyEngine.addOnload(function () {
         Qualtrics.SurveyEngine.setEmbeddedData("forced_headline", forcedArticle.headline);
         Qualtrics.SurveyEngine.setEmbeddedData("forced_text", forcedArticle.text);
       }
+
+      // select second headline task articles
+      var usedHeadlines = articleObjects.map(function(a) { return a.headline; });
+
+      function filterUnused(articles, topic, frame, valence) {
+        return articles.filter(function (a) {
+          return (
+            a.topic === topic &&
+            a.frame === frame &&
+            a.valence === valence &&
+            usedHeadlines.indexOf(a.headline) === -1
+          );
+        });
+      }
+
+      function pickFollowupArticle(topicPool, framePool, valence, usedHeadlines) {
+        var shuffledTopics = shuffleArray(topicPool.slice());
+        var shuffledFrames = shuffleArray(framePool.slice());
+
+        for (var i = 0; i < shuffledTopics.length; i++) {
+          for (var j = 0; j < shuffledFrames.length; j++) {
+            var candidates = filterUnused(articles, shuffledTopics[i], shuffledFrames[j], valence);
+            if (candidates.length > 0) {
+              return randomChoice(candidates);
+            }
+          }
+        }
+        return null; // fallback
+      }
+      var followupPal = pickFollowupArticle(topics, frames, "Palestinian", usedHeadlines);
+      var followupIsr = pickFollowupArticle(topics, frames, "Israeli", usedHeadlines);
+      var followupPlacebos = placeboArticles.filter(function (a) {
+        return usedHeadlines.indexOf(a.headline) === -1;
+      });
+      var followupPlacebo = followupPlacebos.length > 0 ? randomChoice(followupPlacebos) : null;
+
+      var followupArticles = [
+        {
+          slot: "1",
+          headline: followupPal ? followupPal.headline : "",
+          text: followupPal ? followupPal.text : "",
+          topic: followupPal ? followupPal.topic : "",
+          frame: followupPal ? followupPal.frame : ""
+        },
+        {
+          slot: "2",
+          headline: followupIsr ? followupIsr.headline : "",
+          text: followupIsr ? followupIsr.text : "",
+          topic: followupIsr ? followupIsr.topic : "",
+          frame: followupIsr ? followupIsr.frame : ""
+        },
+        {
+          slot: "3",
+          headline: followupPlacebo ? followupPlacebo.headline : "",
+          text: followupPlacebo ? followupPlacebo.text : "",
+          topic: followupPlacebo ? followupPlacebo.topic : "",
+          frame: followupPlacebo ? followupPlacebo.frame : ""
+        }
+      ];
+      followupArticles = shuffleArray(followupArticles);
+
+      for (var i = 0; i < followupArticles.length; i++) {
+        var idx = i + 1;
+        var art = followupArticles[i];
+        Qualtrics.SurveyEngine.setEmbeddedData("headline_" + idx + "_followup", art.headline);
+        Qualtrics.SurveyEngine.setEmbeddedData("article_text_" + idx + "_followup", art.text);
+        Qualtrics.SurveyEngine.setEmbeddedData("article_topic_" + idx + "_followup", art.topic);
+        Qualtrics.SurveyEngine.setEmbeddedData("article_frame_" + idx + "_followup", art.frame);
+      }
+      console.log("Follow-up headline task articles:", followupArticles);
+      // end(follow up task articles)
 
       var spinnerEl = document.getElementById("loadingSpinner");
       if (spinnerEl) spinnerEl.remove();
