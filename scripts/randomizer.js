@@ -1,3 +1,18 @@
+/* 
+  Implements randomization for PICA experiment in Gaza media study.
+
+  We will present 2 articles for respondents to choose from (plus a placebo)
+  We select pro-Israeli and one pro-Palestinian (valence) article. 
+  Within valence, we randomize topic (["October 7", "famine", "hospitals"]) 
+  and frame (["Humanizing", "Infrastructure", "Military"]). 
+
+  We then selecta random article from our set of candidates matching the
+  assignment. 
+
+  We further randomize whether respondents will read the article they choose
+  or will be forced to read a randomly selected article (exposure_type).
+*/
+
 Qualtrics.SurveyEngine.addOnload(function () {
   var qThis = this;
 
@@ -38,9 +53,9 @@ Qualtrics.SurveyEngine.addOnload(function () {
   var exposureType = Math.random() < 0.25 ? "self" : "forced";
   Qualtrics.SurveyEngine.setEmbeddedData("exposure_type", exposureType);
 
-  var topics = shuffleArray(["October 7", "famine", "hospitals"]).slice(0, 2);
-  var topic1 = topics[0];
-  var topic2 = topics[1];
+  var topics = ["October 7", "famine", "hospitals"]
+  var topic1 = randomChoice(topics);
+  var topic2 = randomChoice(topics);
   var frames = ["Humanizing", "Infrastructure", "Military"];
   var frame1 = randomChoice(frames);
   var frame2 = randomChoice(frames);
@@ -116,8 +131,8 @@ Qualtrics.SurveyEngine.addOnload(function () {
 
       if (exposureType === "forced") {
         var forcedArticle = randomChoice(shuffledArticles);
-        Qualtrics.SurveyEngine.setEmbeddedData("display_headline", forcedArticle.headline);
-        Qualtrics.SurveyEngine.setEmbeddedData("display_text", forcedArticle.text);
+        Qualtrics.SurveyEngine.setEmbeddedData("forced_headline", forcedArticle.headline);
+        Qualtrics.SurveyEngine.setEmbeddedData("forced_text", forcedArticle.text);
       }
 
       var spinnerEl = document.getElementById("loadingSpinner");
