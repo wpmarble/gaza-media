@@ -73,6 +73,15 @@
 	},
 	{
 		"topic": "famine",
+		"valence": "Israeli",
+		"frame": "Infrastructure",
+		"source": "YNet",
+		"url": "https://www.ynetnews.com/article/syns3cuk0",
+		"headline": "Hamas slashes food prices as Gaza flooded with humanitarian aid",
+		"text": "Against the backdrop of accusations against Israel of provoking famine in Gaza, which were refuted in a report by the Israeli government this week, Hamas reduced taxes on market goods, prompted by the increased and protected flow of aid and food into the territory.\n\nAlongside reports of damage to Gaza's infrastructure and power outages caused by the war, Hamas has been trying to bolster Gaza's famine narrative around the world in recent weeks. However, social media posts in the past week have noted price drops in Gaza's markets.\n\nHamas' government emergency committee announced a price update for food products in northern Gaza's Jabaliya starting Monday. The price of flour has gone down by over 60%. Canned goods will be sold for five shekels instead of 10. The Popular Resistance Committees, a body comprising Hamas and allied terrorist factions, has monitored market prices and is authorized to ensure goods entering Gaza reach their destinations. \n\n\"Recent online footage shows an influx and congestion in markets,\" an Israeli security source said. \"Given Israeli efforts to increase aid channels to Gaza, the price drops can be attributed to the surplus of goods in the markets, especially in the southern Strip.\""
+	},
+	{
+		"topic": "famine",
 		"valence": "Palestinian",
 		"frame": "Military",
 		"source": "Middle East Monitor",
