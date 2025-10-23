@@ -272,7 +272,7 @@
 	{
 		"topic": "placebo",
 		"valence": "placebo",
-		"frame": "climate-change",
+		"frame": "climate_change",
 		"source": "Al-Jazeera",
 		"url": "https://www.aljazeera.com/news/2023/6/8/planet-warming-at-unprecedented-rate-study-finds",
 		"headline": "Planet warming at ‘unprecedented rate’, study finds",
