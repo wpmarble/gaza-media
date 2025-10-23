@@ -1,4 +1,7 @@
 /* 
+  randomizer.js
+  embedded just before first headline selection question
+  
   Implements randomization for PICA experiment in Gaza media study.
 
   We will present 2 articles for respondents to choose from (plus a placebo)
@@ -6,11 +9,13 @@
   Within valence, we randomize topic (["October 7", "famine", "hospitals"]) 
   and frame (["Humanizing", "Infrastructure", "Military"]). 
 
-  We then selecta random article from our set of candidates matching the
+  We then select a random article from our set of candidates matching the
   assignment. 
 
   We further randomize whether respondents will read the article they choose
   or will be forced to read a randomly selected article (exposure_type).
+
+  Finally, we randomize whether an image is included or not (img_treatment)
 */
 
 Qualtrics.SurveyEngine.addOnload(function () {
@@ -53,6 +58,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
   var exposureType = Math.random() < 0.25 ? "self" : "forced";
   Qualtrics.SurveyEngine.setEmbeddedData("exposure_type", exposureType);
 
+  var imgTreatment = Math.random() < 0.5 ? 0 : 1;
   var topics = ["October 7", "famine", "hospitals"]
   var topic1 = randomChoice(topics);
   var topic2 = randomChoice(topics);
@@ -63,6 +69,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
   var valence1 = valences[0];
   var valence2 = valences[1];
 
+  Qualtrics.SurveyEngine.setEmbeddedData("img_treatment", imgTreatment);
   Qualtrics.SurveyEngine.setEmbeddedData("topic_1", topic1);
   Qualtrics.SurveyEngine.setEmbeddedData("topic_2", topic2);
   Qualtrics.SurveyEngine.setEmbeddedData("frame_1", frame1);
@@ -76,7 +83,9 @@ Qualtrics.SurveyEngine.addOnload(function () {
     valence_1: valence1,
     topic_2: topic2,
     frame_2: frame2,
-    valence_2: valence2
+    valence_2: valence2,
+    imgTreatment: imgTreatment,
+    exposureType: exposureType
   });
 
   fetch(articleUrl)
@@ -103,21 +112,24 @@ Qualtrics.SurveyEngine.addOnload(function () {
           headline: art1 ? art1.headline : "",
           text: art1 ? art1.text : "",
           topic: art1 ? art1.topic : "",
-          frame: art1 ? art1.frame : ""
+          frame: art1 ? art1.frame : "",
+          valence: art1 ? art1.valence : ""
         },
         {
           slot: "2",
           headline: art2 ? art2.headline : "",
           text: art2 ? art2.text : "",
           topic: art2 ? art2.topic : "",
-          frame: art2 ? art2.frame : ""
+          frame: art2 ? art2.frame : "",
+          valence: art2 ? art2.valence : ""
         },
         {
           slot: "3",
           headline: placebo ? placebo.headline : "",
           text: placebo ? placebo.text : "",
           topic: placebo ? placebo.topic : "",
-          frame: placebo ? placebo.frame : ""
+          frame: placebo ? placebo.frame : "",
+          valence: placebo ? placebo.valence : "",
         }
       ];
 
@@ -131,11 +143,15 @@ Qualtrics.SurveyEngine.addOnload(function () {
         Qualtrics.SurveyEngine.setEmbeddedData("article_text_" + idx, art.text);
         Qualtrics.SurveyEngine.setEmbeddedData("article_topic_" + idx, art.topic);
         Qualtrics.SurveyEngine.setEmbeddedData("article_frame_" + idx, art.frame);
+        Qualtrics.SurveyEngine.setEmbeddedData("article_valence_" + idx, art.valence);
       }
 
       if (exposureType === "forced") {
         var forcedArticle = randomChoice(shuffledArticles);
         Qualtrics.SurveyEngine.setEmbeddedData("forced_headline", forcedArticle.headline);
+        Qualtrics.SurveyEngine.setEmbeddedData("forced_topic", forcedArticle.topic);
+        Qualtrics.SurveyEngine.setEmbeddedData("forced_frame", forcedArticle.frame);
+        Qualtrics.SurveyEngine.setEmbeddedData("forced_valence", forcedArticle.valence);
         Qualtrics.SurveyEngine.setEmbeddedData("forced_text", forcedArticle.text);
       }
 
@@ -205,6 +221,7 @@ Qualtrics.SurveyEngine.addOnload(function () {
         Qualtrics.SurveyEngine.setEmbeddedData("headline_" + idx + "_followup", art.headline);
         Qualtrics.SurveyEngine.setEmbeddedData("article_text_" + idx + "_followup", art.text);
         Qualtrics.SurveyEngine.setEmbeddedData("article_topic_" + idx + "_followup", art.topic);
+        Qualtrics.SurveyEngine.setEmbeddedData("article_valence_" + idx + "_followup", art.valence);
         Qualtrics.SurveyEngine.setEmbeddedData("article_frame_" + idx + "_followup", art.frame);
       }
       console.log("Follow-up headline task articles:", followupArticles);
