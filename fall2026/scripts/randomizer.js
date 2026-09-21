@@ -143,8 +143,9 @@
     return side === "pal" ? "isr" : "pal";
   }
 
+  /* Fixed-precision string so Qualtrics exports 2.2425, not the float's full expansion. */
   function round4(x) {
-    return Math.round(x * 10000) / 10000;
+    return (Math.round(x * 10000) / 10000).toFixed(4);
   }
 
   /* -------------------------------------------------------------- assign */
