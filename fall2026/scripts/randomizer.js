@@ -23,13 +23,18 @@
       3. arm_valence           (1 draw; if base_side is none this draw sets arm_target instead)
       4. tasks 1..6 in ascending order. Per task:
            unrestricted (1, 2, 6): 1 draw per stratum pick (top, middle, bottom),
-                                   then 1 draw for the placebo,
-                                   then 3 draws for the Fisher-Yates shuffle of 4 slots
+                                   then 1 draw per placebo (J - 3 of them),
+                                   then J - 1 draws for the Fisher-Yates shuffle of J slots
            restricted   (3, 4, 5): per war slot 2 draws (extreme-vs-middle coin, then pick);
-                                   1 draw per placebo; then 3 shuffle draws
+                                   1 draw per placebo; then J - 1 shuffle draws
+      (Stream changed 2026-09-22 when J went 4 -> 5 and N_WAR_HIGH 3 -> 4; seeds from
+       before that date do not reproduce.)
       5. read_task             (1 draw)
       6. read_own              (1 draw)
       7. read_alt_rank         (1 draw)
+      8. q_share_side          (1 draw)  which side the civilian-share slider names
+      9. q_side_order          (1 draw)  direction of the which-side-more scale
+     10. aid_order             (1 draw)  arms-sale item before or after humanitarian-aid item
   Fallback resolution never consumes an extra draw: the candidate list is resolved
   first, then a single pick draw is taken against it.
 
@@ -49,10 +54,10 @@
   var ARTICLES_URL  = "https://williammarble.com/gaza-media/fall2026/articles.json";
 
   var N_TASKS = 6;                          // total choice tasks
-  var J = 4;                                // alternatives per task
-  var UNRESTRICTED_TASKS = [1, 2, 6];       // one top + one middle + one bottom + one placebo
+  var J = 5;                                // alternatives per task (2026-09-22: was 4)
+  var UNRESTRICTED_TASKS = [1, 2, 6];       // one top + one middle + one bottom + (J-3) placebos
   var RESTRICTED_TASKS = [3, 4, 5];         // composition set by the arms
-  var N_WAR_HIGH = 3;                       // volume arm: war slots per restricted task
+  var N_WAR_HIGH = 4;                       // volume arm: war slots per restricted task (2026-09-22: was 3)
   var N_WAR_LOW = 1;
   var W_EXTREME = 0.5;                      // P(draw from the arm's extreme pool) in a
                                             // restricted war slot; 1 - W_EXTREME goes to
@@ -303,6 +308,25 @@
     out.read_task = 1 + pickIndex(N_TASKS, rng);
     out.read_own = rng() < P_READ_OWN ? 1 : 0;
     out.read_alt_rank = 1 + pickIndex(J - 1, rng);
+
+    /* -- question-wording randomizations (stream positions 8-10) ---------- */
+    /* Which side the civilian-death share slider asks about. */
+    out.q_share_side = rng() < 0.5 ? "pal" : "isr";
+    out.share_side_word = out.q_share_side === "pal" ? "Palestinian" : "Israeli";      /* helper */
+    out.share_side_other = out.q_share_side === "pal" ? "Israeli" : "Palestinian";     /* helper */
+    /* Direction of the which-side-suffered-more scale. */
+    out.q_side_order = rng() < 0.5 ? "pal_first" : "isr_first";
+    var palFirst = [
+      "Palestinians suffered <strong>far more</strong> civilian deaths",
+      "Palestinians suffered <strong>somewhat more</strong> civilian deaths",
+      "About the same on both sides",
+      "Israelis suffered <strong>somewhat more</strong> civilian deaths",
+      "Israelis suffered <strong>far more</strong> civilian deaths"
+    ];
+    var sideLabels = out.q_side_order === "pal_first" ? palFirst : palFirst.slice().reverse();
+    for (i = 0; i < sideLabels.length; i++) out["side_c" + (i + 1)] = sideLabels[i];       /* helpers */
+    /* Order of the two US-aid items (arms sale vs humanitarian aid). */
+    out.aid_order = rng() < 0.5 ? "arms_first" : "aid_first";
 
     out._diag = diag;
     return out;
