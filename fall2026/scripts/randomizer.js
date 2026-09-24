@@ -7,9 +7,12 @@
   What it does
     1. Seeds a mulberry32 PRNG from a FNV-1a hash of resp_id, so the entire
        assignment is reproducible offline from the ResponseID alone.
-    2. Fetches headlines.json, calls assign(), writes every field to embedded data.
-    3. Warm-fetches articles.json into window.fall2026Articles (does not block on it).
-    4. Auto-advances.
+    2. Picks one of K_SHARDS headline shards -- pool_shard = seed % K_SHARDS, NOT a
+       draw from the PRNG stream, so adding sharding did not move any later draw.
+       The shard IS the pool; everything downstream is unchanged.
+    3. Fetches that shard, calls assign(), writes every field to embedded data.
+    4. Auto-advances. (It no longer warm-fetches articles.json: the read stage is
+       parked and renderer.js fetches the small articles file itself.)
 
   assign(pool, inputs, rng) is PURE: no DOM, no Qualtrics, no Math.random, no Date.
   It returns a plain object whose keys are exactly the embedded-data fields to
@@ -36,7 +39,8 @@
       9. q_side_order          (1 draw)  direction of the which-side-more scale
      10. aid_order             (1 draw)  arms-sale item before or after humanitarian-aid item
   Fallback resolution never consumes an extra draw: the candidate list is resolved
-  first, then a single pick draw is taken against it.
+  first, then a single pick draw is taken against it. Nor does the shard choice:
+  pool_shard is seed % K_SHARDS, computed from the seed integer (2026-09-24).
 
   Qualtrics JS environment: ES5 only. No let/const, no arrow functions, no template
   literals, and never the two characters dollar-sign and open-brace adjacent
@@ -50,8 +54,8 @@
 
   /* ------------------------------------------------------------ constants */
 
-  var HEADLINES_URL = "https://williammarble.com/gaza-media/fall2026/headlines.json";
-  var ARTICLES_URL  = "https://williammarble.com/gaza-media/fall2026/articles.json";
+  var HEADLINES_BASE = "https://williammarble.com/gaza-media/fall2026/";
+  var K_SHARDS = 10;                        // headlines-shard-0.json ... -9.json
 
   var N_TASKS = 6;                          // total choice tasks
   var J = 5;                                // alternatives per task (2026-09-22: was 4)
@@ -63,6 +67,20 @@
                                             // restricted war slot; 1 - W_EXTREME goes to
                                             // middle (the overlap design, memo section 9)
   var P_READ_OWN = 0.75;                    // P(read the alternative you chose)
+
+  /* Which shard a respondent gets. Deterministic in the seed and deliberately NOT
+     a draw from the PRNG stream: a draw here would shift every subsequent draw and
+     break replay of assignments made before sharding existed. seed is a uint32 and
+     K_SHARDS is small, so the modulo is effectively uniform. */
+  function poolShard(seed) {
+    var s = Number(seed);
+    if (!isFinite(s)) s = 0;
+    return ((s % K_SHARDS) + K_SHARDS) % K_SHARDS;
+  }
+
+  function shardUrl(shard) {
+    return HEADLINES_BASE + "headlines-shard-" + shard + ".json";
+  }
 
   /* ------------------------------------------------------------------ rng */
 
@@ -176,6 +194,7 @@
     out.base_side_source = bs.base_side_source;
     out.rng_seed = String(inputs.rng_seed === undefined ? "" : inputs.rng_seed);
     out.rng_seed_fallback = inputs.rng_seed_fallback ? 1 : 0;
+    out.pool_shard = poolShard(inputs.rng_seed);
 
     /* -- arms (stream positions 1-3) ------------------------------------ */
     out.arm_volume = rng() < 0.5 ? "high" : "low";
@@ -341,9 +360,11 @@
       fnv1a: fnv1a,
       mulberry32: mulberry32,
       shuffleInPlace: shuffleInPlace,
+      poolShard: poolShard,
+      shardUrl: shardUrl,
       constants: {
-        HEADLINES_URL: HEADLINES_URL,
-        ARTICLES_URL: ARTICLES_URL,
+        HEADLINES_BASE: HEADLINES_BASE,
+        K_SHARDS: K_SHARDS,
         N_TASKS: N_TASKS,
         J: J,
         UNRESTRICTED_TASKS: UNRESTRICTED_TASKS,
@@ -420,13 +441,16 @@
       rng_seed_fallback: seedFallback
     };
 
-    fetch(HEADLINES_URL, { cache: "no-store" })
+    var shard = poolShard(seed);
+    var poolUrl = shardUrl(shard);
+
+    fetch(poolUrl, { cache: "no-store" })
       .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status + " for headlines.json");
+        if (!r.ok) throw new Error("HTTP " + r.status + " for " + poolUrl);
         return r.json();
       })
       .then(function (pool) {
-        if (!pool || !pool.length) throw new Error("headlines.json is empty");
+        if (!pool || !pool.length) throw new Error("empty pool shard " + shard);
 
         var result = assign(pool, inputs, mulberry32(seed));
 
@@ -439,19 +463,12 @@
         Qualtrics.SurveyEngine.setEmbeddedData("randomizer_error", "");
 
         console.log("fall2026 randomizer: seed=" + result.rng_seed +
+                    " shard=" + result.pool_shard + "/" + K_SHARDS +
+                    " (" + pool.length + " headlines)" +
                     " arms=" + result.arm_volume + "/" + result.arm_alpha + "/" +
                     result.arm_valence + "/" + result.arm_target +
                     " n_fallback=" + result.n_fallback);
         console.log("fall2026 menus:", result._diag);
-
-        /* Warm the article cache; never block the page on it. */
-        fetch(ARTICLES_URL, { cache: "force-cache" })
-          .then(function (r) {
-            if (!r.ok) throw new Error("HTTP " + r.status + " for articles.json");
-            return r.json();
-          })
-          .then(function (articles) { global.fall2026Articles = articles; })
-          .catch(function (e) { console.warn("article prefetch failed (non-fatal):", e); });
 
         clearSpinner();
         qThis.clickNextButton();
