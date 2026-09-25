@@ -11,8 +11,7 @@
        draw from the PRNG stream, so adding sharding did not move any later draw.
        The shard IS the pool; everything downstream is unchanged.
     3. Fetches that shard, calls assign(), writes every field to embedded data.
-    4. Auto-advances. (It no longer warm-fetches articles.json: the read stage is
-       parked and renderer.js fetches the small articles file itself.)
+    4. Auto-advances.
 
   assign(pool, inputs, rng) is PURE: no DOM, no Qualtrics, no Math.random, no Date.
   It returns a plain object whose keys are exactly the embedded-data fields to
@@ -32,12 +31,12 @@
                                    1 draw per placebo; then J - 1 shuffle draws
       (Stream changed 2026-09-22 when J went 4 -> 5 and N_WAR_HIGH 3 -> 4; seeds from
        before that date do not reproduce.)
-      5. read_task             (1 draw)
-      6. read_own              (1 draw)
-      7. read_alt_rank         (1 draw)
-      8. q_share_side          (1 draw)  which side the civilian-share slider names
-      9. q_side_order          (1 draw)  direction of the which-side-more scale
-     10. aid_order             (1 draw)  arms-sale item before or after humanitarian-aid item
+      5. q_share_side          (1 draw)  which side the civilian-share slider names
+      6. q_side_order          (1 draw)  direction of the which-side-more scale (also used
+                                         for the headline-bias item's scale direction)
+      7. aid_order             (1 draw)  arms-sale item before or after humanitarian-aid item
+      (The three read-stage draws that sat at positions 5-7 were removed 2026-09-25 when
+       the article-read stage was cut; seeds from before that date do not reproduce.)
   Fallback resolution never consumes an extra draw: the candidate list is resolved
   first, then a single pick draw is taken against it. Nor does the shard choice:
   pool_shard is seed % K_SHARDS, computed from the seed integer (2026-09-24).
@@ -66,7 +65,6 @@
   var W_EXTREME = 0.5;                      // P(draw from the arm's extreme pool) in a
                                             // restricted war slot; 1 - W_EXTREME goes to
                                             // middle (the overlap design, memo section 9)
-  var P_READ_OWN = 0.75;                    // P(read the alternative you chose)
 
   /* Which shard a respondent gets. Deterministic in the seed and deliberately NOT
      a draw from the PRNG stream: a draw here would shift every subsequent draw and
@@ -323,12 +321,7 @@
     for (i = 0; i < unrestrictedWar.length; i++) sumU += unrestrictedWar[i].alpha;
     out.u_mean_alpha = unrestrictedWar.length ? round4(sumU / unrestrictedWar.length) : "";
 
-    /* -- read-stage draws (stream positions 5-7) ------------------------ */
-    out.read_task = 1 + pickIndex(N_TASKS, rng);
-    out.read_own = rng() < P_READ_OWN ? 1 : 0;
-    out.read_alt_rank = 1 + pickIndex(J - 1, rng);
-
-    /* -- question-wording randomizations (stream positions 8-10) ---------- */
+    /* -- question-wording randomizations (stream positions 5-7) ----------- */
     /* Which side the civilian-death share slider asks about. */
     out.q_share_side = rng() < 0.5 ? "pal" : "isr";
     out.share_side_word = out.q_share_side === "pal" ? "Palestinian" : "Israeli";      /* helper */
@@ -344,6 +337,16 @@
     ];
     var sideLabels = out.q_side_order === "pal_first" ? palFirst : palFirst.slice().reverse();
     for (i = 0; i < sideLabels.length; i++) out["side_c" + (i + 1)] = sideLabels[i];       /* helpers */
+    /* Headline-bias item (pilot QID8 wording) runs in the same direction; no extra draw. */
+    var biasPalFirst = [
+      "Strongly biased toward Palestinians",
+      "Somewhat biased toward Palestinians",
+      "Not biased toward either side",
+      "Somewhat biased toward Israelis",
+      "Strongly biased toward Israelis"
+    ];
+    var biasLabels = out.q_side_order === "pal_first" ? biasPalFirst : biasPalFirst.slice().reverse();
+    for (i = 0; i < biasLabels.length; i++) out["bias_c" + (i + 1)] = biasLabels[i];       /* helpers */
     /* Order of the two US-aid items (arms sale vs humanitarian aid). */
     out.aid_order = rng() < 0.5 ? "arms_first" : "aid_first";
 
@@ -371,8 +374,7 @@
         RESTRICTED_TASKS: RESTRICTED_TASKS,
         N_WAR_HIGH: N_WAR_HIGH,
         N_WAR_LOW: N_WAR_LOW,
-        W_EXTREME: W_EXTREME,
-        P_READ_OWN: P_READ_OWN
+        W_EXTREME: W_EXTREME
       }
     };
     return;
