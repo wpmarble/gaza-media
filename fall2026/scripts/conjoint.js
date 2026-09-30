@@ -55,7 +55,7 @@
       levels: {
         deport: "Supports increasing deportations and finishing the border wall.",
         path: "Supports a path to citizenship for undocumented immigrants who have lived here for years.",
-        path_ice: "Supports a path to citizenship for undocumented immigrants who have lived here for years, and abolishing ICE."
+        path_ice: "Supports immediate citizenship for undocumented immigrants who have lived here for at least 2 years, and abolishing ICE."
       }
     },
     health: {
