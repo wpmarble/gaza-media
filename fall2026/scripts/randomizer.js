@@ -35,6 +35,15 @@
       6. q_side_order          (1 draw)  direction of the which-side-more scale (also used
                                          for the headline-bias item's scale direction)
       7. aid_order             (1 draw)  arms-sale item before or after humanitarian-aid item
+      8. cj_row_order          (5 draws) Fisher-Yates order of the six conjoint issue rows
+      9+ conjoint profiles: tasks 1..CJ_TASKS, profile a then b. Per profile:
+           party (1 draw), gender (1 draw), age (1 draw), then six issue-row draws
+           in canonical order (one u each: u < CJ_P_NSP gives "nsp", else the
+           substantive level is picked by rescaling u). If fewer than CJ_MIN_STATED
+           issue rows are stated, ALL six issue draws are redrawn, looping until
+           satisfied. The loop consumes a variable number of draws, but that number
+           is a deterministic function of the seed, so replay is exact. Nothing
+           after the conjoint draws exists, so the variable length moves no later draw.
       (The three read-stage draws that sat at positions 5-7 were removed 2026-09-25 when
        the article-read stage was cut; seeds from before that date do not reproduce.)
   Fallback resolution never consumes an extra draw: the candidate list is resolved
@@ -65,6 +74,26 @@
   var W_EXTREME = 0.5;                      // P(draw from the arm's extreme pool) in a
                                             // restricted war slot; 1 - W_EXTREME goes to
                                             // middle (the overlap design, memo section 9)
+
+  /* ---- candidate conjoint (2026-09-30). Draws are appended to the END of the
+     stream, so no pre-existing field moves. ----------------------------------- */
+  var CJ_TASKS = 3;                         // conjoint tasks
+  var CJ_P_NSP = 0.25;                      // P("No stated position") per issue row
+  var CJ_MIN_STATED = 2;                    // min issue rows with a stated position
+  var CJ_ROWS = ["party", "gender", "age", "gaza", "iran", "imm", "health", "abort", "tax"];
+  var CJ_ISSUE_ROWS = ["gaza", "iran", "imm", "health", "abort", "tax"];
+  var CJ_LEVELS = {
+    party: ["dem", "rep"],
+    gender: ["man", "woman"],
+    age: ["38", "52", "66"],
+    gaza: ["pro", "mid", "end"],
+    iran: ["end", "cont"],
+    imm: ["deport", "path", "path_ice"],
+    health: ["medicare", "market"],
+    abort: ["federal", "states"],
+    tax: ["raise", "cut"]
+  };
+  var NSP = "nsp";                          // issue rows only
 
   /* Which shard a respondent gets. Deterministic in the seed and deliberately NOT
      a draw from the PRNG stream: a draw here would shift every subsequent draw and
@@ -167,6 +196,37 @@
   /* Fixed-precision string so Qualtrics exports 2.2425, not the float's full expansion. */
   function round4(x) {
     return (Math.round(x * 10000) / 10000).toFixed(4);
+  }
+
+  /* Pure: draw one candidate profile, returned as nine pipe-joined codes in
+     CJ_ROWS order. Issue rows: one draw u each; u < CJ_P_NSP gives NSP, otherwise
+     u is rescaled to [0,1) and mapped to a substantive level. Redraws all six
+     issue rows until at least CJ_MIN_STATED are stated (variable draw count,
+     deterministic given the rng). */
+  function cjDrawProfile(rng) {
+    var codes = [];
+    var i, u, lv, n, idx, nStated, issue;
+    codes.push(rng() < 0.5 ? "dem" : "rep");
+    codes.push(rng() < 0.5 ? "man" : "woman");
+    codes.push(CJ_LEVELS.age[pickIndex(CJ_LEVELS.age.length, rng)]);
+    do {
+      issue = [];
+      nStated = 0;
+      for (i = 0; i < CJ_ISSUE_ROWS.length; i++) {
+        u = rng();
+        if (u < CJ_P_NSP) {
+          issue.push(NSP);
+        } else {
+          lv = CJ_LEVELS[CJ_ISSUE_ROWS[i]];
+          n = lv.length;
+          idx = Math.floor((u - CJ_P_NSP) / (1 - CJ_P_NSP) * n);
+          if (idx > n - 1) idx = n - 1;
+          issue.push(lv[idx]);
+          nStated++;
+        }
+      }
+    } while (nStated < CJ_MIN_STATED);
+    return codes.concat(issue).join("|");
   }
 
   /* -------------------------------------------------------------- assign */
@@ -350,6 +410,16 @@
     /* Order of the two US-aid items (arms sale vs humanitarian aid). */
     out.aid_order = rng() < 0.5 ? "arms_first" : "aid_first";
 
+    /* -- candidate conjoint (stream positions 8+) ------------------------- */
+    var cjOrder = shuffleInPlace(CJ_ISSUE_ROWS.slice(), rng);
+    out.cj_row_order = cjOrder.join("|");
+    var t, pi, profiles = ["a", "b"];
+    for (t = 1; t <= CJ_TASKS; t++) {
+      for (pi = 0; pi < profiles.length; pi++) {
+        out["cj" + t + "_" + profiles[pi]] = cjDrawProfile(rng);
+      }
+    }
+
     out._diag = diag;
     return out;
   }
@@ -364,6 +434,7 @@
       mulberry32: mulberry32,
       shuffleInPlace: shuffleInPlace,
       poolShard: poolShard,
+      cjDrawProfile: cjDrawProfile,
       shardUrl: shardUrl,
       constants: {
         HEADLINES_BASE: HEADLINES_BASE,
@@ -374,7 +445,14 @@
         RESTRICTED_TASKS: RESTRICTED_TASKS,
         N_WAR_HIGH: N_WAR_HIGH,
         N_WAR_LOW: N_WAR_LOW,
-        W_EXTREME: W_EXTREME
+        W_EXTREME: W_EXTREME,
+        CJ_TASKS: CJ_TASKS,
+        CJ_P_NSP: CJ_P_NSP,
+        CJ_MIN_STATED: CJ_MIN_STATED,
+        CJ_ROWS: CJ_ROWS,
+        CJ_ISSUE_ROWS: CJ_ISSUE_ROWS,
+        CJ_LEVELS: CJ_LEVELS,
+        NSP: NSP
       }
     };
     return;
