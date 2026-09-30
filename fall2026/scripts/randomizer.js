@@ -77,7 +77,7 @@
 
   /* ---- candidate conjoint (2026-09-30). Draws are appended to the END of the
      stream, so no pre-existing field moves. ----------------------------------- */
-  var CJ_TASKS = 3;                         // conjoint tasks
+  var CJ_TASKS = 4;                         // conjoint tasks (2026-09-30: 3 -> 4; task 4 draws append after task 3, so tasks 1-3 are unchanged)
   var CJ_P_NSP = 0.25;                      // P("No stated position") per issue row
   var CJ_MIN_STATED = 2;                    // min issue rows with a stated position
   var CJ_ROWS = ["party", "gender", "age", "gaza", "iran", "imm", "health", "abort", "tax"];
