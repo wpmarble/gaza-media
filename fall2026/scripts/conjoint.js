@@ -218,13 +218,24 @@
     } catch (e) {
       console.error("conjoint.js task " + TASK + " failed:", e);
     }
+    var err = "";
     if (html === null) {
-      Qualtrics.SurveyEngine.setEmbeddedData(
-        "conjoint_error", "task " + TASK + ": missing or invalid profile"
-      );
+      err = "task " + TASK + ": missing or invalid profile";
       html = "<p>The candidate table could not be loaded.</p>";
+    } else if (!validRowOrder(order)) {
+      err = "task " + TASK + ": invalid cj_row_order, canonical order used";
     }
-    if (target) target.innerHTML = html;
+    if (!target) {
+      err = (err ? err + "; " : "") + "task " + TASK + ": cj-table element missing";
+      target = document.createElement("div");
+      container.appendChild(target);
+    }
+    if (err) {
+      var prev = Qualtrics.SurveyEngine.getEmbeddedData("conjoint_error");
+      Qualtrics.SurveyEngine.setEmbeddedData("conjoint_error", prev ? prev + " | " + err : err);
+      console.error("conjoint.js: " + err);
+    }
+    target.innerHTML = html;
 
     Qualtrics.SurveyEngine.addOnPageSubmit(function (type) {
       if (type === "prev") return;
