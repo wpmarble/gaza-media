@@ -35,13 +35,22 @@
       6. q_side_order          (1 draw)  direction of the which-side-more scale (also used
                                          for the headline-bias item's scale direction)
       7. aid_order             (1 draw)  arms-sale item before or after humanitarian-aid item
-      8. cj_row_order          (5 draws) Fisher-Yates order of the six conjoint issue rows
+      8. cj_row_order          (4 + 1 = 5 draws) display order of the six non-demographic
+                                         rows, gaza and human always adjacent. Fisher-Yates
+                                         (4 draws) over the five units war, imm, health, abort,
+                                         tax; then ONE draw (rng() < 0.5 gives gaza|human,
+                                         else human|gaza) expands "war" into the pair.
       9+ conjoint profiles: tasks 1..CJ_TASKS, profile a then b. Per profile:
-           party (1 draw), gender (1 draw), age (1 draw), then six issue-row draws
-           in canonical order (one u each: u < CJ_P_NSP gives "nsp", else the
+           party (1 draw), gender (1 draw), age (1 draw), then FIVE issue-row draws
+           (gaza, imm, health, abort, tax; one u each: u < CJ_P_NSP gives "nsp", else the
            substantive level is picked by rescaling u). If fewer than CJ_MIN_STATED
-           issue rows are stated, ALL six issue draws are redrawn, looping until
-           satisfied. The loop consumes a variable number of draws, but that number
+           issue rows are stated, ALL five issue draws are redrawn (blocks of 5),
+           looping until satisfied. Then ONE human draw LAST (pickIndex(4): pal, isr,
+           both, none, each 0.25; not an issue row: no NSP, not counted toward
+           CJ_MIN_STATED). Per profile: 3 + 5 (+ 5 per redraw) + 1 draws; minimum
+           2*CJ_TASKS*9 over a respondent. The profile string keeps nine codes in
+           CJ_ROWS order (human sits right after gaza).
+           Iran row cut 2026-09-30 (commented out, reversible): it is not drawn. The loop consumes a variable number of draws, but that number
            is a deterministic function of the seed, so replay is exact. Nothing
            after the conjoint draws exists, so the variable length moves no later draw.
       (The three read-stage draws that sat at positions 5-7 were removed 2026-09-25 when
@@ -80,14 +89,19 @@
   var CJ_TASKS = 4;                         // conjoint tasks (2026-09-30: 3 -> 4; task 4 draws append after task 3, so tasks 1-3 are unchanged)
   var CJ_P_NSP = 0.25;                      // P("No stated position") per issue row
   var CJ_MIN_STATED = 2;                    // min issue rows with a stated position
-  var CJ_ROWS = ["party", "gender", "age", "gaza", "iran", "imm", "health", "abort", "tax"];
-  var CJ_ISSUE_ROWS = ["gaza", "iran", "imm", "health", "abort", "tax"];
+  /* 2026-09-30: Iran row cut to make room for the speech row; uncomment to restore */
+  // var CJ_ROWS = ["party", "gender", "age", "gaza", "iran", "imm", "health", "abort", "tax"];
+  // var CJ_ISSUE_ROWS = ["gaza", "iran", "imm", "health", "abort", "tax"];
+  var CJ_ROWS = ["party", "gender", "age", "gaza", "human", "imm", "health", "abort", "tax"];
+  var CJ_ISSUE_ROWS = ["gaza", "imm", "health", "abort", "tax"];   // rows under the NSP/redraw rule
   var CJ_LEVELS = {
     party: ["dem", "rep"],
     gender: ["man", "woman"],
     age: ["38", "52", "66"],
     gaza: ["pro", "mid", "end"],
-    iran: ["end", "cont"],
+    /* 2026-09-30: Iran row cut to make room for the speech row; uncomment to restore */
+    // iran: ["end", "cont"],
+    human: ["pal", "isr", "both", "none"],   // campaign speech; one draw, 0.25 each, no NSP
     imm: ["deport", "path", "path_ice"],
     health: ["medicare", "market"],
     abort: ["federal", "states"],
@@ -201,11 +215,11 @@
   /* Pure: draw one candidate profile, returned as nine pipe-joined codes in
      CJ_ROWS order. Issue rows: one draw u each; u < CJ_P_NSP gives NSP, otherwise
      u is rescaled to [0,1) and mapped to a substantive level. Redraws all six
-     issue rows until at least CJ_MIN_STATED are stated (variable draw count,
-     deterministic given the rng). */
+     issue rows (five) until at least CJ_MIN_STATED are stated (variable draw count,
+     deterministic given the rng), then draws the human (speech) row once, last. */
   function cjDrawProfile(rng) {
     var codes = [];
-    var i, u, lv, n, idx, nStated, issue;
+    var i, u, lv, n, idx, nStated, issue, human;
     codes.push(rng() < 0.5 ? "dem" : "rep");
     codes.push(rng() < 0.5 ? "man" : "woman");
     codes.push(CJ_LEVELS.age[pickIndex(CJ_LEVELS.age.length, rng)]);
@@ -226,7 +240,27 @@
         }
       }
     } while (nStated < CJ_MIN_STATED);
-    return codes.concat(issue).join("|");
+    human = CJ_LEVELS.human[pickIndex(CJ_LEVELS.human.length, rng)];   // drawn LAST
+    /* canonical order: party, gender, age, gaza, human, imm, health, abort, tax */
+    return codes.concat(issue.slice(0, 1), [human], issue.slice(1)).join("|");
+  }
+
+  /* Pure: display order of the six non-demographic rows with gaza and human
+     adjacent. Fisher-Yates over five units (4 draws), then one draw for the pair
+     direction (rng() < 0.5: gaza first). 5 draws in all. */
+  function cjDrawRowOrder(rng) {
+    var units = shuffleInPlace(["war", "imm", "health", "abort", "tax"], rng);
+    var gazaFirst = rng() < 0.5;
+    var out = [];
+    var i;
+    for (i = 0; i < units.length; i++) {
+      if (units[i] === "war") {
+        if (gazaFirst) { out.push("gaza", "human"); } else { out.push("human", "gaza"); }
+      } else {
+        out.push(units[i]);
+      }
+    }
+    return out;
   }
 
   /* -------------------------------------------------------------- assign */
@@ -411,8 +445,7 @@
     out.aid_order = rng() < 0.5 ? "arms_first" : "aid_first";
 
     /* -- candidate conjoint (stream positions 8+) ------------------------- */
-    var cjOrder = shuffleInPlace(CJ_ISSUE_ROWS.slice(), rng);
-    out.cj_row_order = cjOrder.join("|");
+    out.cj_row_order = cjDrawRowOrder(rng).join("|");
     var t, pi, profiles = ["a", "b"];
     for (t = 1; t <= CJ_TASKS; t++) {
       for (pi = 0; pi < profiles.length; pi++) {
@@ -435,6 +468,7 @@
       shuffleInPlace: shuffleInPlace,
       poolShard: poolShard,
       cjDrawProfile: cjDrawProfile,
+      cjDrawRowOrder: cjDrawRowOrder,
       shardUrl: shardUrl,
       constants: {
         HEADLINES_BASE: HEADLINES_BASE,

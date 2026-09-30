@@ -27,8 +27,13 @@
   /* ------------------------------------------------------------------ */
 
   /* Must match the constants in randomizer.js (test 7.6 checks this). */
-  var CJ_ROWS = ["party", "gender", "age", "gaza", "iran", "imm", "health", "abort", "tax"];
-  var CJ_ISSUE_ROWS = ["gaza", "iran", "imm", "health", "abort", "tax"];
+  /* 2026-09-30: Iran row cut to make room for the speech row; uncomment to restore */
+  // var CJ_ROWS = ["party", "gender", "age", "gaza", "iran", "imm", "health", "abort", "tax"];
+  // var CJ_ISSUE_ROWS = ["gaza", "iran", "imm", "health", "abort", "tax"];
+  var CJ_ROWS = ["party", "gender", "age", "gaza", "human", "imm", "health", "abort", "tax"];
+  var CJ_ISSUE_ROWS = ["gaza", "imm", "health", "abort", "tax"];
+  /* Display rows below the demographics, canonical order; gaza and human stay adjacent. */
+  var CJ_DISPLAY_ROWS = ["gaza", "human", "imm", "health", "abort", "tax"];
   var NSP = "nsp";
 
   var CJ_TEXT = {
@@ -43,13 +48,23 @@
         end: "Supports ending all U.S. military aid and arms sales to Israel."
       }
     },
-    iran: {
+    human: {
+      label: "Campaign speech",
+      levels: {
+        pal: 'In a speech, said Palestinian families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
+        isr: 'In a speech, said Israeli families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
+        both: 'In a speech, said Israeli and Palestinian families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
+        none: "No statement about the war"
+      }
+    },
+    /* 2026-09-30: Iran row cut to make room for the speech row; uncomment to restore */
+    /* iran: {
       label: "War with Iran",
       levels: {
         end: "Supports ending the war with Iran immediately.",
         cont: "Supports continuing the war until Iran's nuclear program is totally destroyed."
       }
-    },
+    }, */
     imm: {
       label: "Immigration",
       levels: {
@@ -120,27 +135,31 @@
       .replace(/"/g, "&quot;");
   }
 
-  /* Pure: rowOrderStr must be a permutation of CJ_ISSUE_ROWS, else canonical. */
-  function validRowOrder(rowOrderStr) {
-    if (rowOrderStr === null || rowOrderStr === undefined || rowOrderStr === "") {
-      return CJ_ISSUE_ROWS.slice();
-    }
+  /* Pure: parsed display order (array of six rows) or null. Valid means a
+     permutation of CJ_DISPLAY_ROWS in which gaza and human are adjacent. */
+  function parseRowOrder(rowOrderStr) {
+    if (rowOrderStr === null || rowOrderStr === undefined || rowOrderStr === "") return null;
     var parts = String(rowOrderStr).split("|");
-    if (parts.length !== CJ_ISSUE_ROWS.length) return CJ_ISSUE_ROWS.slice();
+    if (parts.length !== CJ_DISPLAY_ROWS.length) return null;
     var seen = {};
     var i;
     for (i = 0; i < parts.length; i++) {
-      if (CJ_ISSUE_ROWS.indexOf(parts[i]) === -1 || seen[parts[i]]) {
-        return CJ_ISSUE_ROWS.slice();
-      }
+      if (CJ_DISPLAY_ROWS.indexOf(parts[i]) === -1 || seen[parts[i]]) return null;
       seen[parts[i]] = 1;
     }
+    if (Math.abs(parts.indexOf("gaza") - parts.indexOf("human")) !== 1) return null;
     return parts;
   }
 
+  /* Pure: the parsed order, or canonical order when invalid. */
+  function validRowOrder(rowOrderStr) {
+    return parseRowOrder(rowOrderStr) || CJ_DISPLAY_ROWS.slice();
+  }
+
   function cell(row, code) {
-    if (code === NSP) {
-      return '<td class="cj-nsp"><em>' + NSP_TEXT + "</em></td>";
+    if (code === NSP || (row === "human" && code === "none")) {
+      return '<td class="cj-nsp"><em>' +
+        (code === NSP ? NSP_TEXT : escapeHtml(CJ_TEXT.human.levels.none)) + "</em></td>";
     }
     return "<td>" + escapeHtml(CJ_TEXT[row].levels[code]) + "</td>";
   }
@@ -183,10 +202,13 @@
     module.exports = {
       parseProfile: parseProfile,
       buildTable: buildTable,
+      validRowOrder: validRowOrder,
+      parseRowOrder: parseRowOrder,
       choiceFields: choiceFields,
       CJ_TEXT: CJ_TEXT,
       CJ_ROWS: CJ_ROWS,
       CJ_ISSUE_ROWS: CJ_ISSUE_ROWS,
+      CJ_DISPLAY_ROWS: CJ_DISPLAY_ROWS,
       NSP: NSP,
       TASK: TASK
     };
@@ -222,7 +244,7 @@
     if (html === null) {
       err = "task " + TASK + ": missing or invalid profile";
       html = "<p>The candidate table could not be loaded.</p>";
-    } else if (!validRowOrder(order)) {
+    } else if (parseRowOrder(order) === null) {
       err = "task " + TASK + ": invalid cj_row_order, canonical order used";
     }
     if (!target) {
