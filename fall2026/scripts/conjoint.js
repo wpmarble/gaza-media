@@ -1,9 +1,9 @@
 /*
   conjoint.js  -- fall 2026 candidate conjoint
 
-  Attach to EACH of the three conjoint multiple-choice questions (Candidate A /
-  Candidate B). Change the TASK constant to the task number of that question
-  (1..3) and change nothing else. The question text must contain an element
+  Attach to EACH of the four conjoint multiple-choice questions (Candidate A /
+  Candidate B; CJ_TASKS = 4 since 2026-09-30). Change the TASK constant to the
+  task number of that question (1..4) and change nothing else. The question text must contain an element
   with id "cj-table"; the table is rendered into it.
 
   Reads embedded data written by randomizer.js: cj{t}_a, cj{t}_b, cj_row_order.
@@ -12,6 +12,20 @@
       cj{t}_rt_ms    ms between page load and submit (wall-clock dwell)
   On missing or invalid inputs: sets embedded data conjoint_error and shows a
   visible notice instead of a table.
+
+  Skipping (2026-10-01). randomizer.js writes conjoint_shown = "1" only after the
+  profiles and cj_row_order are written, and the survey flow shows the conjoint
+  block only if conjoint_shown == 1 -- that flow-level skip is what covers the
+  normal failure mode (JS never ran, randomizer died). An in-page render failure
+  AFTER conjoint_shown == 1 (e.g. a corrupted profile string) cannot be skipped
+  from here: this script runs inside a forced-response question and cannot
+  remove itself from the flow, so the respondent still sees the error notice and
+  must answer. conjoint_error is the analysis flag for those cases.
+
+  Level texts may contain the markers [b] and [/b]. richText() HTML-escapes the
+  whole string FIRST and only then turns the exact escaped markers into <b> and
+  </b>, so no level text can inject markup; profile codes never reach the HTML
+  (parseProfile admits only own keys of CJ_TEXT[row].levels).
 
   parseProfile(), buildTable() and choiceFields() are pure and exported for Node.
 
@@ -49,11 +63,11 @@
       }
     },
     human: {
-      label: "Campaign speech",
+      label: "Public remarks",       /* 2026-10-01: was "Campaign speech" (PI) */
       levels: {
-        pal: 'In a speech, said Palestinian families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
-        isr: 'In a speech, said Israeli families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
-        both: 'In a speech, said Israeli and Palestinian families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
+        pal: 'In a speech, said [b]Palestinian[/b] families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
+        isr: 'In a speech, said [b]Israeli[/b] families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
+        both: 'In a speech, said [b]Israeli and Palestinian[/b] families "have the same fundamental right to live in safety, raise their children in peace, and determine their own futures."',
         none: "No statement about the war"
       }
     },
@@ -135,6 +149,28 @@
       .replace(/"/g, "&quot;");
   }
 
+  /* Pure: escaped text with the bold markers [b] ... [/b] turned into tags.
+     Escaping runs first, so the only tags that can appear are the literal <b> and
+     </b> produced here. Unbalanced markers are a codebook bug: test 7.22 checks
+     every level has balanced, non-nested markers. */
+  var B_OPEN = "[b]", B_CLOSE = "[/b]";
+  function richText(s) {
+    return escapeHtml(s).split(B_OPEN).join("<b>").split(B_CLOSE).join("</b>");
+  }
+
+  /* Soft-hyphen break points for the attribute labels that do not fit the narrow
+     phone column unbroken (bold 12px "Immigration" is ~69px against ~55px of
+     room). &shy; renders nothing unless the line actually breaks, so desktop is
+     unchanged. Display only: CJ_TEXT labels stay the plain codebook text. */
+  var LABEL_BREAKS = { imm: "Immi&shy;gration", abort: "Abor&shy;tion" };
+  function labelHtml(row) {
+    var html = escapeHtml(CJ_TEXT[row].label);
+    if (has(LABEL_BREAKS, row) && LABEL_BREAKS[row].split("&shy;").join("") === html) {
+      return LABEL_BREAKS[row];
+    }
+    return html;
+  }
+
   /* Pure: parsed display order (array of six rows) or null. Valid means a
      permutation of CJ_DISPLAY_ROWS in which gaza and human are adjacent. */
   function parseRowOrder(rowOrderStr) {
@@ -159,9 +195,9 @@
   function cell(row, code) {
     if (code === NSP || (row === "human" && code === "none")) {
       return '<td class="cj-nsp"><em>' +
-        (code === NSP ? NSP_TEXT : escapeHtml(CJ_TEXT.human.levels.none)) + "</em></td>";
+        (code === NSP ? NSP_TEXT : richText(CJ_TEXT.human.levels.none)) + "</em></td>";
     }
-    return "<td>" + escapeHtml(CJ_TEXT[row].levels[code]) + "</td>";
+    return "<td>" + richText(CJ_TEXT[row].levels[code]) + "</td>";
   }
 
   /* Pure: HTML for the two-candidate table, or null if either profile is invalid. */
@@ -170,12 +206,15 @@
     var b = parseProfile(bStr);
     if (a === null || b === null) return null;
     var order = ["party", "gender", "age"].concat(validRowOrder(rowOrderStr));
-    var html = '<table class="cj-table"><thead><tr><th></th>' +
+    /* colgroup + table-layout:fixed (CSS) make the A and B columns exactly equal
+       and keep the attribute column narrow, whatever the cell contents. */
+    var html = '<table class="cj-table"><colgroup><col class="cj-attr">' +
+      '<col class="cj-cand"><col class="cj-cand"></colgroup><thead><tr><th></th>' +
       "<th>Candidate A</th><th>Candidate B</th></tr></thead><tbody>";
     var i, row;
     for (i = 0; i < order.length; i++) {
       row = order[i];
-      html += "<tr><td>" + escapeHtml(CJ_TEXT[row].label) + "</td>" +
+      html += "<tr><td>" + labelHtml(row) + "</td>" +
         cell(row, a[row]) + cell(row, b[row]) + "</tr>";
     }
     return html + "</tbody></table>";
@@ -192,16 +231,33 @@
     return out;
   }
 
+  /* 2026-10-01 layout (PI feedback): fixed layout so A and B are equal width; a
+     narrow attribute column (22%, 20% on phones) that wraps; smaller padding and
+     font at <= 480px so nothing overflows at 360-390px. */
   var CSS =
-    ".cj-table { width: 100%; border-collapse: collapse; font-size: 15px; }" +
-    ".cj-table th, .cj-table td { border: 1px solid #999; padding: 6px 8px; vertical-align: top; }" +
-    ".cj-table td:first-child { font-weight: bold; width: 28%; }" +
-    ".cj-table .cj-nsp { font-style: italic; color: #777; }";
+    ".cj-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse;" +
+    " font-size: 15px; line-height: 1.35; }" +
+    ".cj-table col.cj-attr { width: 22%; }" +
+    ".cj-table col.cj-cand { width: 39%; }" +
+    ".cj-table th, .cj-table td { border: 1px solid #999; padding: 6px 8px; vertical-align: top;" +
+    " overflow-wrap: break-word; word-wrap: break-word; }" +
+    ".cj-table th { text-align: center; }" +
+    ".cj-table td:first-child { font-weight: bold; -webkit-hyphens: auto; hyphens: auto; }" +
+    ".cj-table .cj-nsp { font-style: italic; color: #777; }" +
+    "@media (max-width: 480px) {" +
+    " .cj-table { font-size: 13px; line-height: 1.3; }" +
+    " .cj-table col.cj-attr { width: 20%; }" +
+    " .cj-table col.cj-cand { width: 40%; }" +
+    " .cj-table th, .cj-table td { padding: 4px 4px; }" +
+    " .cj-table td:first-child { font-size: 12px; }" +
+    "}";
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       parseProfile: parseProfile,
       buildTable: buildTable,
+      richText: richText,
+      CSS: CSS,
       validRowOrder: validRowOrder,
       parseRowOrder: parseRowOrder,
       choiceFields: choiceFields,

@@ -7,30 +7,36 @@
   What it does
     1. Seeds a mulberry32 PRNG from a FNV-1a hash of resp_id, so the entire
        assignment is reproducible offline from the ResponseID alone.
-    2. Picks one of K_SHARDS headline shards -- pool_shard = seed % K_SHARDS, NOT a
-       draw from the PRNG stream, so adding sharding did not move any later draw.
-       The shard IS the pool; everything downstream is unchanged.
-    3. Fetches that shard, calls assign(), writes every field to embedded data.
-    4. Auto-advances.
+    2. Makes and writes every draw that does NOT need the headline pool (arms,
+       wording, conjoint) BEFORE fetching anything, and sets conjoint_shown = "1".
+    3. Picks one of K_SHARDS headline shards -- pool_shard = seed % K_SHARDS, NOT a
+       draw from the PRNG stream. The shard IS the pool.
+    4. Fetches that shard (FETCH_TIMEOUT_MS timeout), builds the six menus, writes
+       them, sets headlines_shown = "1".
+    5. Auto-advances -- on success AND on failure. On a failed/timed-out fetch it
+       writes randomizer_error, leaves headlines_shown = "0", and the survey flow
+       skips the headline tasks (and the conjoint if conjoint_shown != "1").
 
   assign(pool, inputs, rng) is PURE: no DOM, no Qualtrics, no Math.random, no Date.
   It returns a plain object whose keys are exactly the embedded-data fields to
   write, plus one diagnostic key "_diag" that the Qualtrics binding skips (any key
-  starting with "_" is skipped). Tests call assign() directly.
+  starting with "_" is skipped). Tests call assign() directly. assign(null, ...)
+  returns only the pool-independent fields (headlines_shown = "0"), and they are
+  identical to the same fields of assign(pool, ...) for the same seed: the pool
+  never touches the main stream (menus use their own sub-stream, below).
 
-  RANDOM STREAM ORDER -- fixed, do not reorder; every draw below consumes the one
-  mulberry32 stream in this sequence:
+  RAND_VERSION "2026-10-01" (exported as rand_version). The stream was
+  re-ordered on that date so pool-independent draws precede and do not depend on
+  the menus; seeds from before 2026-10-01 do not reproduce (no real respondents
+  had been collected).
+
+  RANDOM STREAM ORDER -- fixed, do not reorder. MAIN stream = mulberry32(seed):
       1. arm_volume            (1 draw)
       2. arm_alpha             (1 draw)
       3. arm_valence           (1 draw; if base_side is none this draw sets arm_target instead)
-      4. tasks 1..6 in ascending order. Per task:
-           unrestricted (1, 2, 6): 1 draw per stratum pick (top, middle, bottom),
-                                   then 1 draw per placebo (J - 3 of them),
-                                   then J - 1 draws for the Fisher-Yates shuffle of J slots
-           restricted   (3, 4, 5): per war slot 2 draws (extreme-vs-middle coin, then pick);
-                                   1 draw per placebo; then J - 1 shuffle draws
-      (Stream changed 2026-09-22 when J went 4 -> 5 and N_WAR_HIGH 3 -> 4; seeds from
-       before that date do not reproduce.)
+      4. menu_seed             (1 draw) u -> floor(u * 2^32) seeds the MENU sub-stream.
+                                         Drawn whether or not the pool loads, so nothing
+                                         after it moves when the fetch fails.
       5. q_share_side          (1 draw)  which side the civilian-share slider names
       6. q_side_order          (1 draw)  direction of the which-side-more scale (also used
                                          for the headline-bias item's scale direction)
@@ -52,12 +58,28 @@
            CJ_ROWS order (human sits right after gaza).
            Iran row cut 2026-09-30 (commented out, reversible): it is not drawn. The loop consumes a variable number of draws, but that number
            is a deterministic function of the seed, so replay is exact. Nothing
-           after the conjoint draws exists, so the variable length moves no later draw.
-      (The three read-stage draws that sat at positions 5-7 were removed 2026-09-25 when
-       the article-read stage was cut; seeds from before that date do not reproduce.)
+           after the conjoint draws exists in the main stream.
+
+  MENU sub-stream = mulberry32(menu_seed), used only when the pool loaded:
+      M1. gold reservation: for each unrestricted task in UNRESTRICTED_TASKS order
+          (1, 2, 6), 1 draw picking one GOLD war headline (gold === true) uniformly
+          among gold headlines not yet reserved. All three are reserved BEFORE any
+          task is built, so restricted tasks 3-5 cannot use up task 6's gold
+          headline. No gold left: no draw, n_fallback + 1, that task uses the
+          old one-per-stratum rule.
+      M2. tasks 1..6 in ascending order. Per task:
+           unrestricted (1, 2, 6): 1 draw per remaining stratum pick (top, middle,
+                                   bottom in that order, skipping the reserved gold
+                                   headline's stratum: 2 draws; 3 if no gold),
+                                   then 1 draw per placebo (J - 3 of them),
+                                   then J - 1 draws for the Fisher-Yates shuffle of J slots
+           restricted   (3, 4, 5): per war slot 2 draws (extreme-vs-middle coin, then pick);
+                                   1 draw per placebo; then J - 1 shuffle draws
   Fallback resolution never consumes an extra draw: the candidate list is resolved
   first, then a single pick draw is taken against it. Nor does the shard choice:
   pool_shard is seed % K_SHARDS, computed from the seed integer (2026-09-24).
+  Earlier stream changes: 2026-09-22 (J 4 -> 5), 2026-09-25 (read stage cut),
+  2026-09-30 (conjoint appended), 2026-10-01 (this re-order + gold).
 
   Qualtrics JS environment: ES5 only. No let/const, no arrow functions, no template
   literals, and never the two characters dollar-sign and open-brace adjacent
@@ -71,8 +93,10 @@
 
   /* ------------------------------------------------------------ constants */
 
+  var RAND_VERSION = "2026-10-01";          // exported as rand_version; bump on ANY stream change
   var HEADLINES_BASE = "https://williammarble.com/gaza-media/fall2026/";
   var K_SHARDS = 10;                        // headlines-shard-0.json ... -9.json
+  var FETCH_TIMEOUT_MS = 15000;             // give up on the shard after this; skip headline tasks
 
   var N_TASKS = 6;                          // total choice tasks
   var J = 5;                                // alternatives per task (2026-09-22: was 4)
@@ -214,8 +238,8 @@
 
   /* Pure: draw one candidate profile, returned as nine pipe-joined codes in
      CJ_ROWS order. Issue rows: one draw u each; u < CJ_P_NSP gives NSP, otherwise
-     u is rescaled to [0,1) and mapped to a substantive level. Redraws all six
-     issue rows (five) until at least CJ_MIN_STATED are stated (variable draw count,
+     u is rescaled to [0,1) and mapped to a substantive level. Redraws all five
+     issue rows until at least CJ_MIN_STATED are stated (variable draw count,
      deterministic given the rng), then draws the human (speech) row once, last. */
   function cjDrawProfile(rng) {
     var codes = [];
@@ -263,47 +287,42 @@
     return out;
   }
 
+
   /* -------------------------------------------------------------- assign */
 
-  /*
-    pool    array of headline objects from headlines.json
-    inputs  { resp_id, base_symp, base_lean, rng_seed, rng_seed_fallback }
-    rng     function returning a float in [0, 1)
-  */
-  function assign(pool, inputs, rng) {
-    var out = {};
-    var diag = { tasks: [], fallbacks: [] };
-    var used = {};
-    var k, i;
+  function has(obj, key) {
+    return Object.prototype.hasOwnProperty.call(obj, key);
+  }
 
-    /* -- baseline side -------------------------------------------------- */
-    var bs = baseSide(inputs.base_symp, inputs.base_lean);
+  /* A gold headline: crowdsourced-alpha-labelled WAR headline. Strict === true so a
+     string "FALSE" or "0" from a mis-typed build can never count as gold. */
+  function isGold(h) {
+    return !!h && h.gold === true && WAR_STRATA.indexOf(h.stratum) !== -1;
+  }
 
-    out.resp_id = inputs.resp_id === undefined ? "" : inputs.resp_id;
-    out.base_symp = inputs.base_symp === undefined ? "" : inputs.base_symp;
-    out.base_lean = inputs.base_lean === undefined ? "" : inputs.base_lean;
-    out.base_side = bs.base_side;
-    out.base_side_source = bs.base_side_source;
-    out.rng_seed = String(inputs.rng_seed === undefined ? "" : inputs.rng_seed);
-    out.rng_seed_fallback = inputs.rng_seed_fallback ? 1 : 0;
-    out.pool_shard = poolShard(inputs.rng_seed);
-
-    /* -- arms (stream positions 1-3) ------------------------------------ */
-    out.arm_volume = rng() < 0.5 ? "high" : "low";
-    out.arm_alpha = rng() < 0.5 ? "high" : "low";
-
-    if (bs.base_side !== "none") {
-      out.arm_valence = rng() < 0.5 ? "pro" : "counter";
-      out.arm_target = out.arm_valence === "pro" ? bs.base_side : otherSide(bs.base_side);
-    } else {
-      out.arm_valence = "na";
-      out.arm_target = rng() < 0.5 ? "pal" : "isr";
+  /* Keys assign() returns ONLY when the pool loaded. Every other key it returns is
+     pool-independent and identical with or without the pool (test group 8);
+     headlines_shown is a flag ("1" with the pool, "0" without). */
+  function poolDependentKeys() {
+    var ks = ["n_fallback", "r_mean_alpha", "r_share_pal", "r_n_war", "u_mean_alpha",
+              "n_gold_shown"];
+    var k, j;
+    for (k = 1; k <= N_TASKS; k++) {
+      ks.push("t" + k + "_ids");
+      for (j = 1; j <= J; j++) ks.push("t" + k + "_h" + j);
     }
+    return ks;
+  }
 
+  /*
+    Builds the six menus into `out` from the MENU sub-stream mrng. Pure apart from
+    writing into out and diag. Reads out.arm_volume / arm_alpha / arm_target.
+  */
+  function buildMenus(pool, out, mrng, diag) {
+    var used = {};
+    var k, i, u;
     var extremeStratum = out.arm_alpha === "high" ? "top" : "bottom";
-    var armStrata = [extremeStratum, "middle"];
     var nWar = out.arm_volume === "high" ? N_WAR_HIGH : N_WAR_LOW;
-
     var nFallback = 0;
 
     /* Resolve a candidate list for one restricted war slot, walking the
@@ -343,28 +362,52 @@
       if (res.depth > 0) {
         nFallback++;
         diag.fallbacks.push({
-          task: task, want_stratum: wantStratum, want_side: wantSide,
+          kind: "cell", task: task, want_stratum: wantStratum, want_side: wantSide,
           depth: res.depth, resolved_stratum: res.stratum
         });
       }
-      var h = res.cands[pickIndex(res.cands.length, rng)];
+      var h = res.cands[pickIndex(res.cands.length, mrng)];
       used[h.id] = 1;
       return h;
     }
 
-    /* -- menus (stream position 4) -------------------------------------- */
+    /* -- M1: reserve one gold headline per unrestricted task, up front ---- */
+    var goldFor = {};
+    for (u = 0; u < UNRESTRICTED_TASKS.length; u++) {
+      var gc = [];
+      for (i = 0; i < pool.length; i++) {
+        if (!used[pool[i].id] && isGold(pool[i])) gc.push(pool[i]);
+      }
+      if (gc.length === 0) {
+        /* Should not happen once every shard carries >= 9 gold war headlines.
+           No draw is consumed; the task falls back to one-per-stratum. */
+        nFallback++;
+        diag.fallbacks.push({
+          kind: "gold", task: UNRESTRICTED_TASKS[u], want_stratum: "gold",
+          want_side: "any", depth: "no_gold", resolved_stratum: "one_per_stratum"
+        });
+        continue;
+      }
+      var g = gc[pickIndex(gc.length, mrng)];
+      used[g.id] = 1;
+      goldFor[UNRESTRICTED_TASKS[u]] = g;
+    }
+
+    /* -- M2: tasks 1..6 --------------------------------------------------- */
     var restrictedWar = [];
     var unrestrictedWar = [];
+    var nGold = 0;
 
     for (k = 1; k <= N_TASKS; k++) {
       var slots = [];
       var isRestricted = RESTRICTED_TASKS.indexOf(k) !== -1;
       var nWarThis, nPlaceboThis, s, coin, wantStratum;
+      var gold = goldFor[k] || null;
 
       if (isRestricted) {
         nWarThis = nWar;
         for (s = 0; s < nWarThis; s++) {
-          coin = rng();
+          coin = mrng();
           wantStratum = coin < W_EXTREME ? extremeStratum : "middle";
           var hr = take(restrictedCandidates(wantStratum), k, wantStratum, out.arm_target);
           slots.push(hr);
@@ -373,7 +416,12 @@
       } else {
         nWarThis = WAR_STRATA.length;
         for (s = 0; s < WAR_STRATA.length; s++) {
-          var hu = take(unrestrictedCandidates(WAR_STRATA[s]), k, WAR_STRATA[s], "any");
+          var hu;
+          if (gold && gold.stratum === WAR_STRATA[s]) {
+            hu = gold;                              /* gold fills its own stratum's slot */
+          } else {
+            hu = take(unrestrictedCandidates(WAR_STRATA[s]), k, WAR_STRATA[s], "any");
+          }
           slots.push(hu);
           unrestrictedWar.push(hu);
         }
@@ -383,23 +431,26 @@
       for (s = 0; s < nPlaceboThis; s++) {
         var pc = available(pool, used, ["placebo"], null);
         if (pc.length === 0) throw new Error("Placebo pool exhausted at task " + k);
-        var hp = pc[pickIndex(pc.length, rng)];
+        var hp = pc[pickIndex(pc.length, mrng)];
         used[hp.id] = 1;
         slots.push(hp);
       }
 
-      shuffleInPlace(slots, rng);
+      shuffleInPlace(slots, mrng);
 
       var ids = [];
       for (i = 0; i < slots.length; i++) {
         ids.push(slots[i].id);
         out["t" + k + "_h" + (i + 1)] = slots[i].title;
+        if (isGold(slots[i])) nGold++;
       }
       out["t" + k + "_ids"] = ids.join("|");
-      diag.tasks.push({ task: k, restricted: isRestricted, n_war: nWarThis, slots: slots });
+      diag.tasks.push({ task: k, restricted: isRestricted, n_war: nWarThis,
+                        gold_id: gold ? gold.id : null, slots: slots });
     }
 
     out.n_fallback = nFallback;
+    out.n_gold_shown = nGold;
 
     /* -- realized summaries --------------------------------------------- */
     var sumA = 0, nPal = 0;
@@ -414,8 +465,47 @@
     var sumU = 0;
     for (i = 0; i < unrestrictedWar.length; i++) sumU += unrestrictedWar[i].alpha;
     out.u_mean_alpha = unrestrictedWar.length ? round4(sumU / unrestrictedWar.length) : "";
+  }
 
-    /* -- question-wording randomizations (stream positions 5-7) ----------- */
+  /*
+    pool    array of headline objects from a shard, or null when the fetch failed
+    inputs  { resp_id, base_symp, base_lean, rng_seed, rng_seed_fallback }
+    rng     MAIN stream: function returning a float in [0, 1)
+  */
+  function assign(pool, inputs, rng) {
+    var out = {};
+    var diag = { pool_loaded: false, tasks: [], fallbacks: [] };
+    var i;
+
+    /* -- baseline side -------------------------------------------------- */
+    var bs = baseSide(inputs.base_symp, inputs.base_lean);
+
+    out.rand_version = RAND_VERSION;
+    out.resp_id = inputs.resp_id === undefined ? "" : inputs.resp_id;
+    out.base_symp = inputs.base_symp === undefined ? "" : inputs.base_symp;
+    out.base_lean = inputs.base_lean === undefined ? "" : inputs.base_lean;
+    out.base_side = bs.base_side;
+    out.base_side_source = bs.base_side_source;
+    out.rng_seed = String(inputs.rng_seed === undefined ? "" : inputs.rng_seed);
+    out.rng_seed_fallback = inputs.rng_seed_fallback ? 1 : 0;
+    out.pool_shard = poolShard(inputs.rng_seed);
+
+    /* -- arms (main stream positions 1-3) ------------------------------- */
+    out.arm_volume = rng() < 0.5 ? "high" : "low";
+    out.arm_alpha = rng() < 0.5 ? "high" : "low";
+
+    if (bs.base_side !== "none") {
+      out.arm_valence = rng() < 0.5 ? "pro" : "counter";
+      out.arm_target = out.arm_valence === "pro" ? bs.base_side : otherSide(bs.base_side);
+    } else {
+      out.arm_valence = "na";
+      out.arm_target = rng() < 0.5 ? "pal" : "isr";
+    }
+
+    /* -- menu sub-stream seed (main stream position 4; drawn ALWAYS) ---- */
+    var menuSeed = Math.floor(rng() * 4294967296) >>> 0;
+
+    /* -- question-wording randomizations (main stream positions 5-7) ----- */
     /* Which side the civilian-death share slider asks about. */
     out.q_share_side = rng() < 0.5 ? "pal" : "isr";
     out.share_side_word = out.q_share_side === "pal" ? "Palestinian" : "Israeli";      /* helper */
@@ -444,7 +534,7 @@
     /* Order of the two US-aid items (arms sale vs humanitarian aid). */
     out.aid_order = rng() < 0.5 ? "arms_first" : "aid_first";
 
-    /* -- candidate conjoint (stream positions 8+) ------------------------- */
+    /* -- candidate conjoint (main stream positions 8+) -------------------- */
     out.cj_row_order = cjDrawRowOrder(rng).join("|");
     var t, pi, profiles = ["a", "b"];
     for (t = 1; t <= CJ_TASKS; t++) {
@@ -452,9 +542,165 @@
         out["cj" + t + "_" + profiles[pi]] = cjDrawProfile(rng);
       }
     }
+    out.conjoint_shown = "1";
+
+    /* -- menus (MENU sub-stream; only with a pool) ------------------------ */
+    out.headlines_shown = "0";
+    if (pool === null || pool === undefined) {
+      out._diag = diag;
+      return out;
+    }
+    if (Object.prototype.toString.call(pool) !== "[object Array]" || pool.length === 0) {
+      throw new Error("pool is not a non-empty array");
+    }
+    buildMenus(pool, out, mulberry32(menuSeed), diag);
+    diag.pool_loaded = true;
+    out.headlines_shown = "1";
 
     out._diag = diag;
     return out;
+  }
+
+  /* ------------------------------------------------------------ binding */
+
+  /*
+    runBinding(env): the whole Qualtrics-side procedure, with every side effect
+    injected so the Node tests can drive it with a fake engine, fake fetch and fake
+    timers (test group 8). env:
+      engine        { getEmbeddedData(k), setEmbeddedData(k, v) }   (Qualtrics.SurveyEngine)
+      question      { clickNextButton() }                           (the question's this)
+      fetch         function(url, opts) -> Promise, or null when unavailable
+      setTimeout, clearTimeout, now() (ms), random(), ui { clear() } (optional), log (optional)
+
+    Order: flags to "0" -> pool-independent fields (+ conjoint_shown "1") -> fetch
+    with timeout -> menus + headlines_shown "1" -> advance. Any failure: write
+    randomizer_error, leave headlines_shown "0", advance. Advances at most once;
+    a fetch that settles after the timeout writes nothing.
+  */
+  function runBinding(env) {
+    var Q = env.engine;
+    var qThis = env.question;
+    var log = env.log || function () {};
+    var finished = false;
+    var timer = null;
+    var state = { seed: null, url: null, advanced: 0 };
+
+    function set(k, v) { Q.setEmbeddedData(k, v); }
+
+    /* Every non-underscore key except the two flags, which are written last. */
+    function writeFields(obj) {
+      var key;
+      for (key in obj) {
+        if (!has(obj, key)) continue;
+        if (key.charAt(0) === "_") continue;
+        if (key === "headlines_shown" || key === "conjoint_shown") continue;
+        set(key, obj[key]);
+      }
+    }
+
+    function advance() {
+      if (finished) return;
+      finished = true;
+      if (timer !== null) {
+        try { env.clearTimeout(timer); } catch (e0) { /* ignore */ }
+        timer = null;
+      }
+      try { if (env.ui) env.ui.clear(); } catch (e1) { /* ignore */ }
+      state.advanced++;
+      try { qThis.clickNextButton(); } catch (e2) { log("clickNextButton failed", e2); }
+    }
+
+    function fail(where, err) {
+      if (finished) { log("fall2026 randomizer: ignored after advance (" + where + ")", err); return; }
+      var msg = where + ": " + (err && err.message ? err.message : String(err));
+      log("fall2026 randomizer failed at " + msg);
+      try { set("headlines_shown", "0"); } catch (e3) { /* ignore */ }
+      try { set("randomizer_error", msg); } catch (e4) { /* ignore */ }
+      advance();
+    }
+
+    try {
+      /* A run that dies anywhere below leaves both flags at "0", so the flow skips. */
+      set("headlines_shown", "0");
+      set("conjoint_shown", "0");
+      set("randomizer_error", "");
+
+      var respId = Q.getEmbeddedData("resp_id");
+      var seedFallback = 0;
+      var seed;
+      if (respId === null || respId === undefined || String(respId) === "") {
+        seed = fnv1a(String(env.now()) + ":" + env.random());
+        seedFallback = 1;
+      } else {
+        seed = fnv1a(String(respId));
+      }
+      state.seed = seed;
+
+      var inputs = {
+        resp_id: respId === null || respId === undefined ? "" : String(respId),
+        base_symp: Q.getEmbeddedData("base_symp"),
+        base_lean: Q.getEmbeddedData("base_lean"),
+        rng_seed: seed,
+        rng_seed_fallback: seedFallback
+      };
+
+      /* Pool-independent fields, written before any network access. */
+      var base = assign(null, inputs, mulberry32(seed));
+      writeFields(base);
+      set("conjoint_shown", "1");
+
+      var shard = poolShard(seed);
+      var poolUrl = shardUrl(shard);
+      state.url = poolUrl;
+
+      timer = env.setTimeout(function () {
+        timer = null;
+        fail("timeout", new Error("no pool after " + FETCH_TIMEOUT_MS + " ms from " + poolUrl));
+      }, FETCH_TIMEOUT_MS);
+
+      var onPool = function (pool) {
+        if (finished) { log("fall2026 randomizer: late pool ignored"); return; }
+        if (!pool || !pool.length) throw new Error("empty pool shard " + shard);
+        var full = assign(pool, inputs, mulberry32(seed));
+        var key;
+        var extra = {};
+        for (key in base) {
+          if (!has(base, key) || key.charAt(0) === "_" || key === "headlines_shown") continue;
+          if (full[key] !== base[key]) throw new Error("pool-independent field moved: " + key);
+        }
+        /* Write only what the pool added (the base fields are already written and
+           were just checked equal), so conjoint_shown stays after every cj write. */
+        for (key in full) {
+          if (has(full, key) && !has(base, key)) extra[key] = full[key];
+        }
+        writeFields(extra);
+        set("headlines_shown", "1");
+        log("fall2026 randomizer: seed=" + full.rng_seed +
+            " shard=" + full.pool_shard + "/" + K_SHARDS +
+            " (" + pool.length + " headlines)" +
+            " arms=" + full.arm_volume + "/" + full.arm_alpha + "/" +
+            full.arm_valence + "/" + full.arm_target +
+            " n_fallback=" + full.n_fallback + " n_gold_shown=" + full.n_gold_shown);
+        log("fall2026 menus:", full._diag);
+        advance();
+      };
+
+      if (typeof env.fetch !== "function") throw new Error("fetch unavailable");
+      env.fetch(poolUrl, { cache: "no-store" })
+        .then(function (r) {
+          if (finished) return null;
+          if (!r || !r.ok) throw new Error("HTTP " + (r ? r.status : "?") + " for " + poolUrl);
+          return r.json();
+        })
+        .then(function (pool) {
+          if (finished) { log("fall2026 randomizer: late response ignored"); return; }
+          onPool(pool);
+        })
+        .then(null, function (err) { fail("fetch", err); });
+    } catch (e) {
+      fail("binding", e);
+    }
+    return state;
   }
 
   /* ------------------------------------------------- Node export / guard */
@@ -462,6 +708,10 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       assign: assign,
+      buildMenus: buildMenus,
+      runBinding: runBinding,
+      poolDependentKeys: poolDependentKeys,
+      isGold: isGold,
       baseSide: baseSide,
       fnv1a: fnv1a,
       mulberry32: mulberry32,
@@ -471,6 +721,8 @@
       cjDrawRowOrder: cjDrawRowOrder,
       shardUrl: shardUrl,
       constants: {
+        RAND_VERSION: RAND_VERSION,
+        FETCH_TIMEOUT_MS: FETCH_TIMEOUT_MS,
         HEADLINES_BASE: HEADLINES_BASE,
         K_SHARDS: K_SHARDS,
         N_TASKS: N_TASKS,
@@ -498,95 +750,63 @@
 
   Qualtrics.SurveyEngine.addOnload(function () {
     var qThis = this;
+    var advancedHere = false;
 
-    qThis.getQuestionContainer().style.display = "none";
-    qThis.hideNextButton();
-    qThis.hidePreviousButton();
+    try {
+      qThis.getQuestionContainer().style.display = "none";
+      qThis.hideNextButton();
+      qThis.hidePreviousButton();
+    } catch (e0) { /* cosmetic */ }
 
-    var spinner = document.createElement("div");
-    spinner.setAttribute("id", "fall2026Spinner");
-    spinner.setAttribute(
-      "style",
-      "border:8px solid #f3f3f3; border-top:8px solid #3498db; border-radius:50%;" +
-      " width:50px; height:50px; animation:spin 1s linear infinite; margin:50px auto;"
-    );
-    document.body.appendChild(spinner);
-    var style = document.createElement("style");
-    style.innerHTML =
-      "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
-    document.head.appendChild(style);
-
-    function clearSpinner() {
-      var el = document.getElementById("fall2026Spinner");
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-    }
-
-    function fail(where, err) {
-      console.error("randomizer.js failed at " + where + ":", err);
-      clearSpinner();
-      Qualtrics.SurveyEngine.setEmbeddedData(
-        "randomizer_error", where + ": " + (err && err.message ? err.message : String(err))
+    var ui = { clear: function () {} };
+    try {
+      var spinner = document.createElement("div");
+      spinner.setAttribute("id", "fall2026Spinner");
+      spinner.setAttribute(
+        "style",
+        "border:8px solid #f3f3f3; border-top:8px solid #3498db; border-radius:50%;" +
+        " width:50px; height:50px; animation:spin 1s linear infinite; margin:50px auto;"
       );
-      var msg = document.createElement("div");
-      msg.setAttribute("style", "margin:40px auto; max-width:40em; font-size:16px;");
-      msg.appendChild(document.createTextNode(
-        "We could not load the survey materials. Please refresh the page. " +
-        "If the problem persists, close the survey and contact the researcher."
-      ));
-      document.body.appendChild(msg);
-      qThis.showNextButton();
-    }
+      document.body.appendChild(spinner);
+      var style = document.createElement("style");
+      style.innerHTML =
+        "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+      document.head.appendChild(style);
+      ui.clear = function () {
+        var el = document.getElementById("fall2026Spinner");
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      };
+    } catch (e1) { /* cosmetic */ }
 
-    var respId = Qualtrics.SurveyEngine.getEmbeddedData("resp_id");
-    var seedFallback = 0;
-    var seed;
-    if (respId === null || respId === undefined || String(respId) === "") {
-      seed = fnv1a(String(Date.now()) + ":" + Math.random());
-      seedFallback = 1;
-    } else {
-      seed = fnv1a(String(respId));
-    }
-
-    var inputs = {
-      resp_id: respId === null || respId === undefined ? "" : String(respId),
-      base_symp: Qualtrics.SurveyEngine.getEmbeddedData("base_symp"),
-      base_lean: Qualtrics.SurveyEngine.getEmbeddedData("base_lean"),
-      rng_seed: seed,
-      rng_seed_fallback: seedFallback
-    };
-
-    var shard = poolShard(seed);
-    var poolUrl = shardUrl(shard);
-
-    fetch(poolUrl, { cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status + " for " + poolUrl);
-        return r.json();
-      })
-      .then(function (pool) {
-        if (!pool || !pool.length) throw new Error("empty pool shard " + shard);
-
-        var result = assign(pool, inputs, mulberry32(seed));
-
-        var key;
-        for (key in result) {
-          if (!Object.prototype.hasOwnProperty.call(result, key)) continue;
-          if (key.charAt(0) === "_") continue;   /* diagnostics stay client-side */
-          Qualtrics.SurveyEngine.setEmbeddedData(key, result[key]);
+    var state = null;
+    try {
+      state = runBinding({
+        engine: Qualtrics.SurveyEngine,
+        question: {
+          clickNextButton: function () { advancedHere = true; qThis.clickNextButton(); }
+        },
+        fetch: typeof fetch === "function" ? function (u, o) { return fetch(u, o); } : null,
+        setTimeout: function (f, ms) { return setTimeout(f, ms); },
+        clearTimeout: function (h) { clearTimeout(h); },
+        now: function () { return Date.now(); },
+        random: function () { return Math.random(); },
+        ui: ui,
+        log: function (a, b) {
+          if (b === undefined) console.log(a); else console.log(a, b);
         }
-        Qualtrics.SurveyEngine.setEmbeddedData("randomizer_error", "");
-
-        console.log("fall2026 randomizer: seed=" + result.rng_seed +
-                    " shard=" + result.pool_shard + "/" + K_SHARDS +
-                    " (" + pool.length + " headlines)" +
-                    " arms=" + result.arm_volume + "/" + result.arm_alpha + "/" +
-                    result.arm_valence + "/" + result.arm_target +
-                    " n_fallback=" + result.n_fallback);
-        console.log("fall2026 menus:", result._diag);
-
-        clearSpinner();
+      });
+    } catch (e2) {
+      /* runBinding catches internally; this is the last line of defence. */
+      console.error("randomizer.js binding threw:", e2);
+      if (!advancedHere) {
+        try {
+          Qualtrics.SurveyEngine.setEmbeddedData("randomizer_error",
+            "outer: " + (e2 && e2.message ? e2.message : String(e2)));
+        } catch (e3) { /* ignore */ }
+        ui.clear();
         qThis.clickNextButton();
-      })
-      .catch(function (err) { fail("assign", err); });
+      }
+    }
+    return state;
   });
 })(typeof window !== "undefined" ? window : global);
