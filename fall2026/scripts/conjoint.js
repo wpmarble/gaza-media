@@ -232,13 +232,13 @@
   }
 
   /* 2026-10-01 layout (PI feedback): fixed layout so A and B are equal width; a
-     narrow attribute column (22%, 20% on phones) that wraps; smaller padding and
+     narrow attribute column (18% desktop, 20% on phones) that wraps; smaller padding and
      font at <= 480px so nothing overflows at 360-390px. */
   var CSS =
     ".cj-table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse;" +
     " font-size: 15px; line-height: 1.35; }" +
-    ".cj-table col.cj-attr { width: 22%; }" +
-    ".cj-table col.cj-cand { width: 39%; }" +
+    ".cj-table col.cj-attr { width: 18%; }" +
+    ".cj-table col.cj-cand { width: 41%; }" +
     ".cj-table th, .cj-table td { border: 1px solid #999; padding: 6px 8px; vertical-align: top;" +
     " overflow-wrap: break-word; word-wrap: break-word; }" +
     ".cj-table th { text-align: center; }" +

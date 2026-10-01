@@ -1,9 +1,9 @@
 {
   "k": 10,
   "seed": 20260924,
-  "built": "2026-09-30T17:59:28-0700",
-  "n_total": 26310,
-  "n_war": 26190,
+  "built": "2026-09-30T18:26:53-0700",
+  "n_total": 26256,
+  "n_war": 26136,
   "n_placebo": 120,
   "min_cell_per_shard": 12,
   "note": "Stratum is MT's `tail` column (top = composite decile 10, bottom = decile 1, middle = the rest). Every shard carries the full placebo pool; war headlines appear in exactly one shard.",
@@ -11,9 +11,10 @@
     "1. empty title or url": 0,
     "2. duplicate title (normalised)": 130,
     "3. title < 25 characters": 39,
-    "4. A: Lebanon/Iran/Yemen only (no Gaza term)": 2840,
-    "5. B: dead / out-of-office figure": 1580,
-    "6. C: hygiene (regex or Haiku)": 1959,
+    "4. A: Lebanon/Iran/Yemen only (no Gaza term)": 2861,
+    "5. B: dead / out-of-office figure": 1591,
+    "5b. B: 'Pope' dated before 2025-05-08 (= Francis)": 23,
+    "6. C: hygiene (regex or Haiku)": 1958,
     "7. C: near-duplicate (Jaccard >= 0.8)": 228
   },
   "filters": {
@@ -35,29 +36,34 @@
       },
       {
         "rule": "4. A: Lebanon/Iran/Yemen only (no Gaza term)",
-        "dropped": 2840,
+        "dropped": 2861,
         "gold_dropped": 8
       },
       {
         "rule": "5. B: dead / out-of-office figure",
-        "dropped": 1580,
-        "gold_dropped": 4
+        "dropped": 1591,
+        "gold_dropped": 5
+      },
+      {
+        "rule": "5b. B: 'Pope' dated before 2025-05-08 (= Francis)",
+        "dropped": 23,
+        "gold_dropped": 0
       },
       {
         "rule": "6. C: hygiene (regex or Haiku)",
-        "dropped": 1959,
+        "dropped": 1958,
         "gold_dropped": 7
       },
       {
         "rule": "7. C: near-duplicate (Jaccard >= 0.8)",
         "dropped": 228,
-        "gold_dropped": 2
+        "gold_dropped": 1
       }
     ],
     "hygiene_drop_source": {
       "regex": 417,
       "haiku": 291,
-      "regex+haiku": 1251
+      "regex+haiku": 1250
     },
     "haiku_model": "claude-haiku-4-5-20251001",
     "jaccard_threshold": 0.8,
@@ -73,18 +79,18 @@
   },
   "cells": {
     "top": {
-      "pal": 6198,
-      "isr": 1736,
+      "pal": 6197,
+      "isr": 1735,
       "both": 78
     },
     "middle": {
-      "pal": 9286,
-      "isr": 5734,
-      "both": 2716
+      "pal": 9264,
+      "isr": 5716,
+      "both": 2706
     },
     "bottom": {
       "pal": 120,
-      "isr": 162,
+      "isr": 160,
       "both": 160
     },
     "placebo": {
@@ -95,8 +101,8 @@
     {
       "file": "headlines-shard-0.json",
       "k": 0,
-      "n": 2741,
-      "n_war": 2621,
+      "n": 2735,
+      "n_war": 2615,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -105,13 +111,13 @@
           "both": 8
         },
         "middle": {
-          "pal": 928,
-          "isr": 574,
-          "both": 272
+          "pal": 926,
+          "isr": 572,
+          "both": 271
         },
         "bottom": {
           "pal": 12,
-          "isr": 17,
+          "isr": 16,
           "both": 16
         },
         "placebo": {
@@ -122,8 +128,8 @@
     {
       "file": "headlines-shard-1.json",
       "k": 1,
-      "n": 2740,
-      "n_war": 2620,
+      "n": 2736,
+      "n_war": 2616,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -132,13 +138,13 @@
           "both": 8
         },
         "middle": {
-          "pal": 928,
-          "isr": 573,
-          "both": 272
+          "pal": 927,
+          "isr": 572,
+          "both": 271
         },
         "bottom": {
           "pal": 12,
-          "isr": 17,
+          "isr": 16,
           "both": 16
         },
         "placebo": {
@@ -149,8 +155,8 @@
     {
       "file": "headlines-shard-2.json",
       "k": 2,
-      "n": 2740,
-      "n_war": 2620,
+      "n": 2735,
+      "n_war": 2615,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -159,9 +165,9 @@
           "both": 8
         },
         "middle": {
-          "pal": 929,
-          "isr": 573,
-          "both": 272
+          "pal": 927,
+          "isr": 571,
+          "both": 271
         },
         "bottom": {
           "pal": 12,
@@ -176,8 +182,8 @@
     {
       "file": "headlines-shard-3.json",
       "k": 3,
-      "n": 2740,
-      "n_war": 2620,
+      "n": 2735,
+      "n_war": 2615,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -186,9 +192,9 @@
           "both": 8
         },
         "middle": {
-          "pal": 929,
-          "isr": 573,
-          "both": 272
+          "pal": 927,
+          "isr": 571,
+          "both": 271
         },
         "bottom": {
           "pal": 12,
@@ -203,19 +209,19 @@
     {
       "file": "headlines-shard-4.json",
       "k": 4,
-      "n": 2740,
-      "n_war": 2620,
+      "n": 2734,
+      "n_war": 2614,
       "n_placebo": 120,
       "cells": {
         "top": {
           "pal": 620,
-          "isr": 174,
+          "isr": 173,
           "both": 8
         },
         "middle": {
-          "pal": 929,
-          "isr": 573,
-          "both": 272
+          "pal": 927,
+          "isr": 571,
+          "both": 271
         },
         "bottom": {
           "pal": 12,
@@ -230,19 +236,19 @@
     {
       "file": "headlines-shard-5.json",
       "k": 5,
-      "n": 2738,
-      "n_war": 2618,
+      "n": 2731,
+      "n_war": 2611,
       "n_placebo": 120,
       "cells": {
         "top": {
-          "pal": 620,
+          "pal": 619,
           "isr": 173,
           "both": 8
         },
         "middle": {
-          "pal": 929,
-          "isr": 573,
-          "both": 271
+          "pal": 926,
+          "isr": 571,
+          "both": 270
         },
         "bottom": {
           "pal": 12,
@@ -257,8 +263,8 @@
     {
       "file": "headlines-shard-6.json",
       "k": 6,
-      "n": 2737,
-      "n_war": 2617,
+      "n": 2732,
+      "n_war": 2612,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -267,9 +273,9 @@
           "both": 8
         },
         "middle": {
-          "pal": 929,
-          "isr": 573,
-          "both": 271
+          "pal": 926,
+          "isr": 572,
+          "both": 270
         },
         "bottom": {
           "pal": 12,
@@ -284,8 +290,8 @@
     {
       "file": "headlines-shard-7.json",
       "k": 7,
-      "n": 2738,
-      "n_war": 2618,
+      "n": 2732,
+      "n_war": 2612,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -294,9 +300,9 @@
           "both": 8
         },
         "middle": {
-          "pal": 929,
-          "isr": 574,
-          "both": 271
+          "pal": 926,
+          "isr": 572,
+          "both": 270
         },
         "bottom": {
           "pal": 12,
@@ -311,8 +317,8 @@
     {
       "file": "headlines-shard-8.json",
       "k": 8,
-      "n": 2737,
-      "n_war": 2617,
+      "n": 2732,
+      "n_war": 2612,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -321,9 +327,9 @@
           "both": 7
         },
         "middle": {
-          "pal": 928,
-          "isr": 574,
-          "both": 271
+          "pal": 926,
+          "isr": 572,
+          "both": 270
         },
         "bottom": {
           "pal": 12,
@@ -338,8 +344,8 @@
     {
       "file": "headlines-shard-9.json",
       "k": 9,
-      "n": 2739,
-      "n_war": 2619,
+      "n": 2734,
+      "n_war": 2614,
       "n_placebo": 120,
       "cells": {
         "top": {
@@ -348,9 +354,9 @@
           "both": 7
         },
         "middle": {
-          "pal": 928,
-          "isr": 574,
-          "both": 272
+          "pal": 926,
+          "isr": 572,
+          "both": 271
         },
         "bottom": {
           "pal": 12,
